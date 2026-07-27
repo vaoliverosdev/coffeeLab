@@ -1,0 +1,805 @@
+<!DOCTYPE html><html lang="pt-BR" data-theme="dark"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Lab</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#6f4e37">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Coffee Lab">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head><body>
+    
+    <!-- CONTAINER DE NOTIFICAÇÕES TOAST (FASE 2) -->
+    <div id="toast-container"></div>
+
+    <div
+    id="offline-indicator" 
+    class="offline-indicator hidden"
+    role="status"
+    aria-live="polite"
+>
+    <span class="offline-indicator-icon">●</span>
+    <span id="offline-indicator-text">
+        Você está offline
+    </span>
+</div>
+
+    <!-- TELA DE AUTENTICAÇÃO (SÓ EXIBIDA SE DESLOGADO) -->
+    <div id="auth-screen" class="auth-wrapper hidden">
+        <div class="auth-card">
+            <div class="auth-header">
+                <span class="logo-icon">☕</span>
+                <h2>Coffee Lab</h2>
+                <p id="auth-subtitle">Entre na sua conta para acessar seus cafés e receitas</p>
+            </div>
+            
+            <!-- Form de Login -->
+            <form id="login-form" class="auth-form">
+                <div class="form-group">
+                    <label for="login-email">E-mail</label>
+                    <input type="email" id="login-email" required placeholder="seu@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Senha</label>
+                    <input type="password" id="login-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn btn-primary">Entrar</button>
+                <p class="auth-switch">Não tem conta? <a href="#" id="go-to-register">Criar conta</a></p>
+                <p class="auth-switch"><a href="#" id="go-to-recover" style="font-size:12px; color:var(--text-secondary);">Esqueceu sua senha?</a></p>
+            </form>
+
+            <!-- Form de Registro -->
+            <form id="register-form" class="auth-form hidden">
+                <div class="form-group">
+                    <label for="reg-name">Nome Completo</label>
+                    <input type="text" id="reg-name" placeholder="Como te chamamos?">
+                </div>
+                <div class="form-group">
+                    <label for="reg-email">E-mail</label>
+                    <input type="email" id="reg-email" placeholder="seu@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="reg-password">Senha (mínimo 6 caracteres)</label>
+                    <input type="password" id="reg-password" placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn btn-primary">Cadastrar</button>
+                <p class="auth-switch">Já tem uma conta? <a href="#" id="go-to-login">Fazer Login</a></p>
+            </form>
+
+            <!-- Form de Recuperação -->
+            <form id="recover-form" class="auth-form hidden">
+                <div class="form-group">
+                    <label for="rec-email">E-mail Cadastrado</label>
+                    <input type="email" id="rec-email" placeholder="seu@email.com">
+                </div>
+                <button type="submit" class="btn btn-primary">Enviar link de recuperação</button>
+                <p class="auth-switch"><a href="#" id="back-to-login">Voltar para o Login</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL DA APLICAÇÃO (SÓ EXIBIDO SE LOGADO) -->
+    <div id="app" class="hidden">
+        <header class="topbar">
+            <div class="brand">
+                <button class="icon-btn menu-toggle" aria-label="Menu">☰</button>
+                <span class="logo-icon">☕</span>
+                <span class="logo-text">Coffee Lab</span>
+            </div>
+            <div class="topbar-actions">
+                <button id="install-pwa-btn" class="install-pwa-btn hidden" type="button">Instalar Coffee Lab </button>
+                <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; padding: 8px;">🌓</button>
+                <a href="#/profile" class="user-profile-btn" id="topbar-avatar-btn">
+                    <img id="user-avatar-mini" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar">
+                </a>
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <nav class="nav">
+                <a href="#/dashboard" class="nav-link" data-view="dashboard">Dashboard</a>
+                <a href="#/coffees" class="nav-link" data-view="coffees">Cafés</a>
+                <a href="#/stock" class="nav-link" data-view="stock">Estoque</a>
+                <a href="#/recipes" class="nav-link" data-view="recipes">Receitas</a>
+                <a href="#/extractions" class="nav-link" data-view="extractions">Extrações</a>
+                <a href="#/sensory" class="nav-link" data-view="sensory"><span class="icon"></span> Diário Sensorial</a>
+                <a href="#/beverages" class="nav-link" data-view="beverages">Caderno de Bebidas</a>
+                <a href="#/ai" class="nav-link" data-view="ai">Barista de IA</a>
+                <a href="#/stats" class="nav-link" data-view="stats">Estatísticas</a>
+                <a href="#/explorer" class="nav-link" data-view="explorer">Explorador Sensorial</a>
+                <hr style="border: 0; border-top: 1px solid var(--border); margin: 12px 0; width: 100%;">
+                <a href="#/profile" class="nav-link" data-view="profile">Meu Perfil</a>
+                <a href="#" id="logout-btn" class="nav-link" style="color: #ff4d4d;">Sair</a>
+            </nav>
+        </aside>
+
+<main class="main" id="main">
+            <!-- VIEW: DASHBOARD -->
+            <section id="view-dashboard" class="view">
+                <h1 id="welcome-title">Bem-vindo, Barista!</h1>
+                <p>Aqui está o resumo do seu laboratório hoje.</p>
+                <div class="cards">
+                    <div class="card skeleton" style="height:120px"></div>
+                    <div class="card skeleton" style="height:120px"></div>
+                    <div class="card skeleton" style="height:120px"></div>
+                </div>
+            </section>
+
+            <!-- VIEW: MEU PERFIL (FASE 1) -->
+            <section id="view-profile" class="view">
+                <h1>Meu Perfil</h1>
+                <p>Gerencie seus dados e preferências de perfil no Coffee Lab.</p>
+                
+                <div class="card profile-card" style="margin-top: 20px;">
+                    <div class="profile-avatar-section">
+                        <div class="avatar-container">
+                            <img id="profile-avatar-big" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Foto de Perfil">
+                            <label for="avatar-input" class="avatar-edit-label">Alterar</label>
+                            <input type="file" id="avatar-input" accept="image/*" style="display:none;">
+                        </div>
+                        <div class="profile-meta">
+                            <h3 id="profile-name-display">Nome do Barista</h3>
+                            <p id="profile-email-display">email@dominio.com</p>
+                        </div>
+                    </div>
+                    
+                    <form id="profile-form" style="margin-top: 24px;">
+                        <div class="form-group">
+                            <label for="profile-name">Nome Exibido</label>
+                            <input type="text" id="profile-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="profile-bio">Sua Biografia / Notas de Barista</label>
+                            <textarea id="profile-bio" rows="4" placeholder="Fale um pouco sobre suas preferências por extração, métodos favoritos, etc..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Salvar Perfil</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- VIEW: BIBLIOTECA DE CAFÉS (FASE 3) -->
+            <section id="view-coffees" class="view">
+                <div class="view-header">
+                    <div>
+                        <h1>Biblioteca de Cafés</h1>
+                        <p>Gerencie seus grãos especiais, origens e perfis sensoriais.</p>
+                    </div>
+                    <button class="btn btn-primary btn-auto" id="btn-add-coffee">+ Adicionar Café</button>
+                </div>
+
+                <div class="toolbar">
+                    <input type="text" id="coffee-search" placeholder="Buscar por nome, torrefação, notas...">
+                    
+                    <select id="filter-process">
+                        <option value="">Todos os Processos</option>
+                        <option value="Natural">Natural</option>
+                        <option value="Lavado">Lavado (Washed)</option>
+                        <option value="Honey">Honey Process</option>
+                        <option value="Anaeróbico">Maceración Anaeróbica</option>
+                    </select>
+
+                    <select id="filter-roast">
+                        <option value="">Todas as Torras</option>
+                        <option value="Clara">Torra Clara</option>
+                        <option value="Média">Torra Média</option>
+                        <option value="Escura">Torra Escura</option>
+                    </select>
+
+                    <select id="sort-coffees">
+                        <option value="name">Ordenar por Nome</option>
+                        <option value="sca_score">Maior Pontuação SCA</option>
+                        <option value="roast_date">Torra mais Recente</option>
+                    </select>
+
+                    <button class="icon-btn" id="btn-filter-fav" aria-label="Apenas Favoritos" title="Apenas Favoritos">⭐</button>
+                </div>
+
+                <div id="coffee-grid" class="coffee-grid-layout">
+                    <!-- Gerado Dinamicamente via JS -->
+                </div>
+            </section>
+
+            <!-- VIEW: CONTROLE DE ESTOQUE (FASE 4) -->
+            <section id="view-stock" class="view">
+                <div class="view-header">
+                    <div>
+                        <h1>Controle de Estoque</h1>
+                        <p>Acompanhe o peso atual dos seus grãos e evite ficar sem café.</p>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 0; overflow: hidden; margin-top: 20px;">
+                    <table class="stock-table">
+                        <thead>
+                            <tr>
+                                <th>Grão Especial</th>
+                                <th>Torrefação</th>
+                                <th>Status do Lacre</th>
+                                <th>Quantidade Atual</th>
+                                <th>Limite Mínimo</th>
+                                <th style="text-align: right;">Ações de Inventário</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stock-table-body">
+                            <!-- Injetado dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- VIEW: SISTEMA DE RECEITAS (FASE 5) -->
+            <section id="view-recipes" class="view">
+                <div class="view-header">
+                    <div>
+                        <h1>Livro de Receitas</h1>
+                        <p>Planeje suas proporções de extração, moagem e passos de ataque de água.</p>
+                    </div>
+                    <button class="btn btn-primary btn-auto" id="btn-add-recipe">+ Criar Receita</button>
+                </div>
+
+                <!-- PANEL DO MOTOR INTELIGENTE (FASE 6) -->
+                <div class="card" style="margin-bottom: 24px; background: color-mix(in srgb, var(--accent) 5%, var(--surface-raised)); border-color: var(--accent);">
+                    <h3 style="margin-top: 0; display: flex; align-items: center; gap: 8px; font-size: 15px;">
+                        <span>⚖️</span> Motor Inteligente de Proporções
+                    </h3>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">
+                        Ajuste dinamicamente a quantidade de café, água ou o ratio. O sistema escalona as outras variáveis automaticamente.
+                    </p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="motor-coffee">Café (g)</label>
+                            <input type="number" id="motor-coffee" step="0.1" value="15.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="motor-ratio">Ratio (1 : X)</label>
+                            <input type="number" id="motor-ratio" step="0.1" value="16.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="motor-water">Água Total (g)</label>
+                            <input type="number" id="motor-water" step="1" value="240">
+                        </div>
+                    </div>
+                    <div id="motor-feedback" style="margin-top: 12px; font-size: 12px; color: var(--accent); font-weight: 500; font-style: italic;">
+                        Pronto para escalonar sua bancada.
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <input type="text" id="recipe-search" placeholder="Buscar por nome, notas, moagem...">
+                    <select id="filter-recipe-method">
+                        <option value="">Todos os Métodos</option>
+                        <option value="Hario V60">Hario V60</option>
+                        <option value="Aeropress">Aeropress</option>
+                        <option value="Chemex">Chemex</option>
+                        <option value="Prensa Francesa">Prensa Francesa</option>
+                        <option value="Espresso">Espresso</option>
+                    </select>
+                    <button class="icon-btn" id="btn-filter-recipe-fav" title="Apenas Favoritas">⭐</button>
+                </div>
+
+                <div id="recipe-grid" class="coffee-grid-layout">
+                    <!-- Gerado assincronamente pelo JS -->
+                </div>
+            </section>
+
+            <!-- VIEW: HISTÓRICO DE EXTRAÇÕES (FASE 8) -->
+            <section id="view-extractions" class="view">
+                <div class="view-header">
+                    <div>
+                        <h1>Histórico de Extrações</h1>
+                        <p>Reveja o tempo de fluxo e os parâmetros dos seus cafés passados.</p>
+                    </div>
+                </div>
+                <div id="extractions-timeline" style="margin-top: 20px; max-width: 800px;">
+                    <!-- Gerado dinamicamente via JS -->
+                </div>
+            </section>
+
+<!-- VIEW: DIÁRIO SENSORIAL (FASE 9) -->
+<section id="view-sensory" class="view">
+  <div class="view-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+    <div>
+      <h2>Diário Sensorial de Catação</h2>
+      <p>Registre suas impressões de acidez, corpo, aroma e notas percebidas.</p>
+    </div>
+<button class="btn btn-primary btn-sm btn-auto" id="btn-open-sensory-modal" style="padding: 8px 14px; font-size: 13px;">
+  + Nova Degustação
+</button>
+  </div>
+
+  <div id="sensory-logs-list" class="grid-cards">
+    <!-- Os cards de degustação serão renderizados aqui pelo app.js -->
+  </div>
+</section>
+
+<!-- VIEW: EXPLORADOR SENSORIAL (FASE 10) -->
+<section id="view-explorer" class="view">
+    <div class="view-header">
+        <div>
+            <h1>Explorador Sensorial</h1>
+            <p>Mapeie seu paladar de barista, descubra frequências de notas e receba recomendações automáticas.</p>
+        </div>
+    </div>
+    
+    <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 24px;">
+        <div class="card">
+            <h3>📊 Resumo do Perfil</h3>
+            <div id="explorer-summary-metrics" style="margin-top: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 8px;">
+                Carregando dados do seu paladar...
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3>💡 Sugestões do Especialista</h3>
+            <ul id="explorer-suggestions-list" style="margin-top: 12px; padding-left: 20px; font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
+                <li>Carregando recomendações...</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px;">
+        <h3>🎨 Roda Sensorial Interativa (Flavor Wheel)</h3>
+        <p style="font-size: 13px; color: var(--text-secondary);">Clique nas famílias sensoriais para explorar os atributos e notas de catação.</p>
+        
+        <div class="sensory-wheel-container" style="margin-top: 20px;">
+            <div class="flavor-grid">
+                <button class="flavor-btn" style="background:#ef4444; color:white;" onclick="window.explorerActions.showFlavorDetail('Frutado', 'Frutas vermelhas, cítricas, mirtilo, limão e maçã.')">🍎 Frutado</button>
+                <button class="flavor-btn" style="background:#f59e0b; color:white;" onclick="window.explorerActions.showFlavorDetail('Doces & Caramelo', 'Mel, açúcar mascavo, caramelo, baunilha e melaço.')">🍯 Doce / Caramelo</button>
+                <button class="flavor-btn" style="background:#8b5cf6; color:white;" onclick="window.explorerActions.showFlavorDetail('Floral', 'Jasmim, flor de laranjeira, camomila e rosas.')">🌸 Floral</button>
+                <button class="flavor-btn" style="background:#78350f; color:white;" onclick="window.explorerActions.showFlavorDetail('Chocolate & Nozes', 'Cacau 70%, avelã, amêndoas e nozes.')">🍫 Chocolate / Nozes</button>
+                <button class="flavor-btn" style="background:#10b981; color:white;" onclick="window.explorerActions.showFlavorDetail('Especiarias', 'Canela, noz-moscada, cravo e pimenta branca.')">🌿 Especiarias</button>
+            </div>
+            <div id="flavor-detail-box" class="card" style="margin-top: 16px; background: var(--surface); display:none;">
+                <h4 id="flavor-detail-title" style="margin:0 0 6px 0;"></h4>
+                <p id="flavor-detail-desc" style="margin:0; font-size: 13px; color: var(--text-secondary);"></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- VIEW: CADERNO DE BEBIDAS (FASE 11) -->
+<section id="view-beverages" class="view">
+    <div class="view-header">
+        <div>
+            <h1>Caderno de Bebidas</h1>
+            <p>Gerencie seu menu, de clássicos a criações autorais.</p>
+        </div>
+        <!-- Botão padronizado que agora abre o Modal -->
+<button class="btn btn-primary btn-sm btn-auto" id="btn-open-beverage-modal" style="padding: 8px 14px; font-size: 13px;">
+  + Nova Bebida
+</button>
+    </div>
+
+    <div class="cards" id="beverages-list" style="margin-bottom: 24px;">
+        <!-- Os cards das bebidas entrarão aqui via JS -->
+    </div>
+
+<!-- JANELINHA (MODAL) DE DIÁRIO SENSORIAL -->
+<div id="modal-sensory" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 16px; backdrop-filter: blur(4px);">
+    <div class="card" style="width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; position: relative; background: #18181b; border: 1px solid #27272a; padding: 24px;">
+        
+        <!-- Botão de Fechar (X) no topo direito -->
+        <button type="button" onclick="document.getElementById('modal-sensory').style.display='none'" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        
+        <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 18px; color: #f4f4f5;">Registrar Degustação</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Avalie os atributos sensoriais da xícara (escala de 1 a 10).</p>
+        
+        <form id="sensory-form" class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Café Avaliado *</label>
+                <!-- <select id="sensory-coffee-id" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                    <option value="">Selecione um café...</option>
+                </select> -->
+            </div>
+            
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Extração Relacionada (Opcional)</label>
+                <select id="sensory-extraction-id" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                    <option value="">Nenhuma / Avulsa</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🌸 Aroma (1-10)</label>
+                <input type="number" id="sensory-aroma" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍋 Acidez (1-10)</label>
+                <input type="number" id="sensory-acidity" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">💧 Corpo (1-10)</label>
+                <input type="number" id="sensory-body" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍬 Doçura (1-10)</label>
+                <input type="number" id="sensory-sweetness" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">✨ Finalização / Aftertaste (1-10)</label>
+                <input type="number" id="sensory-aftertaste" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Notas Percebidas</label>
+                <input type="text" id="sensory-perceived" placeholder="Ex: Mel, Limão Siciliano, Chocolate" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Notas Não Percebidas (da embalagem)</label>
+                <input type="text" id="sensory-unperceived" placeholder="Ex: Jasmim, Noz-moscada" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Observações Gerais</label>
+                <textarea id="sensory-comments" rows="3" placeholder="Impressões sobre a extração, temperatura ou moagem..." class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5; resize: vertical;"></textarea>
+            </div>
+            
+            <!-- Botões de Ação do Modal -->
+            <div style="grid-column: 1 / -1; margin-top: 10px; display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" class="btn" onclick="document.getElementById('modal-sensory').style.display='none'" style="background: transparent; border: 1px solid #27272a; color: #f4f4f5; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="submit" class="btn btn-primary" style="padding: 10px 20px; border-radius: 6px; cursor: pointer;">Salvar Registro</button>
+            </div>
+        </form>
+    </div>
+</div>
+</section>
+
+<!-- VIEW: BARISTA DE IA -->
+<section id="view-ai" class="view">
+  <div class="ai-chat-wrapper">
+    
+    <!-- SIDEBAR (Menu Lateral do Histórico) -->
+    <aside id="ai-sidebar" class="ai-sidebar">
+      <div class="ai-sidebar-header">
+        <button id="ai-new-chat-btn" class="btn-new-chat">+ Novo Chat</button>
+      </div>
+      <div id="ai-sessions-list" class="ai-sessions-list">
+        <!-- Histórico de conversas renderizado via JS -->
+      </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL DO CHAT -->
+    <main class="ai-chat-main">
+      
+      <!-- 1. TOPO / HEADER (Com botão Hambúrguer ÚNICO + Título) -->
+      <div class="ai-chat-header">
+        <button id="ai-toggle-sidebar" class="btn-hamburger" title="Alternar Histórico">
+          ☰
+        </button>
+        <div>
+          <h1 style="margin: 0; font-size: 16px; font-weight: 600;">Barista de IA</h1>
+          <p style="margin: 0; font-size: 11px; color: #a1a1aa;">Seu especialista pessoal em cafés especiais</p>
+        </div>
+      </div>
+
+      <!-- 2. CONTAINER DAS MENSAGENS (Scroll vertical) -->
+      <div id="ai-chat-messages" class="ai-chat-messages">
+        <!-- Balões de mensagem renderizados via JS -->
+      </div>
+
+      <!-- 3. RODAPÉ FIXO (Input + Botão de Enviar) -->
+      <form id="ai-chat-form" class="ai-chat-form">
+        <input 
+          type="text" 
+          id="ai-chat-input" 
+          placeholder="Pergunte ao Barista de IA..." 
+          autocomplete="off" 
+        />
+        <button type="submit" class="btn-send">Enviar</button>
+      </form>
+
+    </main>
+
+  </div>
+</section>
+
+            <!-- VIEW: ESTATÍSTICAS (FASE 13) -->
+<section id="view-stats" class="view">
+  <div class="view-header">
+    <div>
+      <h1>Estatísticas e Gráficos</h1>
+      <p>Acompanhe seu consumo, métodos favoritos e evolução sensorial.</p>
+    </div>
+  </div>
+
+  <!-- NOVO: Barra de Filtros -->
+  <div class="filters-container" style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; background: var(--bg-secondary); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+    
+    <div style="flex: 1; min-width: 150px;">
+      <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Período</label>
+      <select id="stats-filter-time" class="input" style="width: 100%;" onchange="fetchAndRenderStats()">
+        <option value="all">Todo o Período</option>
+        <option value="7">Última Semana</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="year">Este Ano</option>
+      </select>
+    </div>
+
+    <div style="flex: 1; min-width: 150px;">
+      <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Método</label>
+      <select id="stats-filter-method" class="input" style="width: 100%;" onchange="fetchAndRenderStats()">
+        <option value="all">Todos os Métodos</option>
+        <!-- Preenchido via JS -->
+      </select>
+    </div>
+
+    <div style="flex: 1; min-width: 150px;">
+      <label style="font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Perfil Sensorial</label>
+      <select id="stats-filter-profile" class="input" style="width: 100%;" onchange="fetchAndRenderStats()">
+        <option value="all">Todos os Perfis</option>
+        <option value="Doce">Doce</option>
+        <option value="Frutado">Frutado</option>
+        <option value="Intenso">Intenso</option>
+        <option value="Exótico">Exótico</option>
+      </select>
+    </div>
+  </div>
+  
+  <!-- Cards de Resumo -->
+  <div class="cards" id="stats-summary-cards" style="margin-bottom: 24px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+    <!-- Renderizado dinamicamente via JS -->
+    <div class="card skeleton" style="height:100px"></div>
+    <div class="card skeleton" style="height:100px"></div>
+    <div class="card skeleton" style="height:100px"></div>
+  </div>
+
+  <!-- Área de Gráficos -->
+  <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));">
+    <div class="card">
+      <h3 style="margin-top: 0; font-size: 16px;">Consumo Mensal de Café</h3>
+      <div style="position: relative; height: 260px; width: 100%;">
+        <canvas id="chart-consumption"></canvas>
+      </div>
+    </div>
+    
+    <div class="card">
+      <h3 style="margin-top: 0; font-size: 16px;">Métodos Mais Utilizados</h3>
+      <div style="position: relative; height: 260px; width: 100%;">
+        <canvas id="chart-methods"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+        </main> <!-- FECHAMENTO DO MAIN AQUI! -->
+    </div> <!-- FECHAMENTO DO APP CONTAINER -->
+
+    <!-- ========================================== -->
+    <!-- MODAIS DO SISTEMA (FICAM FORA DO MAIN)     -->
+    <!-- ========================================== -->
+
+    <!-- MODAL CAFÉ -->
+    <div id="coffee-modal" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 id="modal-coffee-title">Adicionar Grão Especial</h2>
+                <button class="modal-close" id="modal-coffee-close">✕</button>
+            </div>
+            <form id="coffee-form" class="modal-body">
+                <input type="hidden" id="form-coffee-id">
+                <div class="form-row">
+                    <div class="form-group flex-2">
+                        <label for="coffee-name-input">Nome do Café *</label>
+                        <input type="text" id="coffee-name-input" required placeholder="Ex: Sítio Santa Rita">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label for="coffee-sca-input">Pontuação SCA</label>
+                        <input type="number" id="coffee-sca-input" step="0.25" min="0" max="100" placeholder="Ex: 86.5">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="coffee-roastery-input">Torrefação *</label>
+                        <input type="text" id="coffee-roastery-input" required placeholder="Ex: Coffee Lab, Pura Caffeina">
+                    </div>
+                    <div class="form-group">
+                        <label for="coffee-origin-input">País de Origem *</label>
+                        <input type="text" id="coffee-origin-input" required placeholder="Ex: Brasil, Colômbia, Etiópia">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="coffee-region-input">Região / Produtor</label>
+                        <input type="text" id="coffee-region-input" placeholder="Ex: Mantiqueira de Minas">
+                    </div>
+                    <div class="form-group">
+                        <label for="coffee-variety-input">Variedade</label>
+                        <input type="text" id="coffee-variety-input" placeholder="Ex: Catuaí Amarelo, Bourbon">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="coffee-process-input">Processo de Pós-Colheita</label>
+                        <select id="coffee-process-input">
+                            <option value="">Não Especificado</option>
+                            <option value="Natural">Natural</option>
+                            <option value="Lavado">Lavado</option>
+                            <option value="Honey">Honey Process</option>
+                            <option value="Anaeróbico">Anaeróbico</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="coffee-roast-input">Grau de Torra</label>
+                        <select id="coffee-roast-input">
+                            <option value="">Não Especificado</option>
+                            <option value="Clara">Clara</option>
+                            <option value="Média">Média</option>
+                            <option value="Escura">Escura</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="coffee-altitude-input">Altitude (m)</label>
+                        <input type="text" id="coffee-altitude-input" placeholder="Ex: 1200">
+                    </div>
+                    <div class="form-group">
+                        <label for="coffee-roastdate-input">Data da Torra</label>
+                        <input type="date" id="coffee-roastdate-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="coffee-sensory-input">Notas Sensoriais Percebidas</label>
+                    <input type="text" id="coffee-sensory-input" placeholder="Ex: Chocolate amargo, Notas cítricas de laranja">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="modal-coffee-cancel">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Café</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL REFILL ESTOQUE -->
+    <div id="stock-refill-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Registrar Compra / Entrada</h2>
+                <button class="modal-close" id="modal-refill-close">✕</button>
+            </div>
+            <form id="stock-refill-form" class="modal-body">
+                <input type="hidden" id="refill-stock-id">
+                <div class="form-group">
+                    <label for="refill-qty-input">Quantidade Adicionada (g) *</label>
+                    <input type="number" id="refill-qty-input" required min="1" placeholder="Ex: 250">
+                </div>
+                <div class="form-group">
+                    <label for="refill-notes-input">Observações / Fornecedor</label>
+                    <input type="text" id="refill-notes-input" placeholder="Ex: Lote novo enviado pela torrefação">
+                </div>
+                <div class="modal-footer" style="padding: 10px 0 0 0; border: none;">
+                    <button type="submit" class="btn btn-primary">Confirmar Entrada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL AJUSTE ESTOQUE -->
+    <div id="stock-adjust-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2>Configurar Níveis e Alertas</h2>
+                <button class="modal-close" id="modal-adjust-close">✕</button>
+            </div>
+            <form id="stock-adjust-form" class="modal-body">
+                <input type="hidden" id="adjust-stock-id">
+                <div class="form-group">
+                    <label for="adjust-qty-input">Peso Atual Real (g)</label>
+                    <input type="number" id="adjust-qty-input" required min="0" placeholder="Ajustar peso na balança">
+                </div>
+                <div class="form-group">
+                    <label for="adjust-min-input">Aviso de Estoque Baixo (g)</label>
+                    <input type="number" id="adjust-min-input" required min="0" placeholder="Disparar alerta quando atingir">
+                </div>
+                <div class="modal-footer" style="padding: 10px 0 0 0; border: none;">
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL HISTÓRICO ESTOQUE -->
+    <div id="stock-history-modal" class="modal-overlay hidden">
+        <div class="modal-card" style="max-width: 540px;">
+            <div class="modal-header">
+                <h2>Histórico de Movimentações</h2>
+                <button class="modal-close" id="modal-history-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <ul id="stock-history-list" class="history-log-list">
+                    <!-- Injetado via Javascript -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+<!-- MODAL CADERNO DE BEBIDAS (FASE 11) -->
+<div id="modal-beverage" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-card" style="max-width: 550px;">
+        <div class="modal-header">
+            <h3>Nova Bebida do Cardápio</h3>
+            <button type="button" class="modal-close" onclick="const m = document.getElementById('modal-beverage'); m.classList.add('hidden'); m.style.display='none';">✕</button>
+        </div>
+        <form id="beverage-form" class="modal-body" style="display:flex; flex-direction:column; gap: 12px; margin-top: 15px;">
+            <div>
+                <label for="bev-name">Nome da Bebida *</label>
+                <input type="text" id="bev-name" class="input-field" required placeholder="Ex: Espresso Tônica, Cappuccino...">
+            </div>
+            <div>
+                <label for="bev-ingredients">Ingredientes</label>
+                <input type="text" id="bev-ingredients" class="input-field" placeholder="Ex: Café espresso, água tônica, gelo, fatia de limão">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label for="bev-shots">Shots de Espresso</label>
+                    <input type="number" id="bev-shots" class="input-field" min="0" value="1">
+                </div>
+                <div>
+                    <label for="bev-volume">Volume Total (ml)</label>
+                    <input type="number" id="bev-volume" class="input-field" min="0" placeholder="Ex: 200">
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                <input type="checkbox" id="bev-iscold" style="width: 18px; height: 18px;">
+                <label for="bev-iscold" style="margin: 0; cursor: pointer;">É uma bebida gelada? 🧊</label>
+            </div>
+            <div>
+                <label for="bev-desc">Modo de Preparo / Descrição</label>
+                <textarea id="bev-desc" class="input-field" rows="3" placeholder="Detalhes do preparo ou apresentação..."></textarea>
+            </div>
+            <div class="modal-footer" style="padding: 10px 0 0 0; border: none; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-secondary" onclick="const m = document.getElementById('modal-beverage'); m.classList.add('hidden'); m.style.display='none';">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Bebida</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <!-- MODAL DEGUSTAÇÃO SENSORIAL (FASE 9) -->
+<div id="sensory-modal" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-card" style="max-width: 550px;">
+        <div class="modal-header">
+            <h3>Registrar Degustação</h3>
+            <button type="button" class="modal-close" onclick="const m = document.getElementById('sensory-modal'); m.classList.add('hidden'); m.style.display='none';">✕</button>
+        </div>
+        <form id="sensory-form" class="modal-body" style="display:flex; flex-direction:column; gap: 12px; margin-top: 15px;">
+            <label>Selecione o Café:
+                <select id="sensory-coffee-id" class="input-field" required>
+                <option value="">Carregando cafés...</option>
+                </select>
+            </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <label>Aroma (1-10): <input type="number" id="sensory-aroma" min="1" max="10" value="7" class="input-field" required></label>
+                <label>Acidez (1-10): <input type="number" id="sensory-acidity" min="1" max="10" value="7" class="input-field" required></label>
+                <label>Corpo (1-10): <input type="number" id="sensory-body" min="1" max="10" value="7" class="input-field" required></label>
+                <label>Doçura (1-10): <input type="number" id="sensory-sweetness" min="1" max="10" value="7" class="input-field" required></label>
+            </div>
+            <label>Finalização / Aftertaste (1-10):
+                <input type="number" id="sensory-aftertaste" min="1" max="10" value="7" class="input-field" required>
+            </label>
+            <label>Notas Percebidas:
+                <input type="text" id="sensory-perceived" placeholder="Ex: Mel, Limão Siciliano, Chocolate Amargo" class="input-field">
+            </label>
+            <label>Notas Não Percebidas (da embalagem):
+                <input type="text" id="sensory-unperceived" placeholder="Ex: Jasmim, Noz-moscada" class="input-field">
+            </label>
+            <label>Observações Gerais:
+                <textarea id="sensory-comments" placeholder="Impressões sobre a extração, temperatura ou moagem..." class="input-field" rows="3"></textarea>
+            </label>
+            <div class="modal-footer" style="padding: 10px 0 0 0; border: none; display: flex; justify-content: flex-end; gap: 10px;">
+                <button type="button" class="btn btn-secondary" onclick="const m = document.getElementById('sensory-modal'); m.classList.add('hidden'); m.style.display='none';">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Registro</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

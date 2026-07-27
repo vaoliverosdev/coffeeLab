@@ -1,0 +1,801 @@
+:root {
+  --font: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --radius: 12px;
+  --radius-sm: 8px;
+
+  /* Light Theme */
+  --bg: #ffffff;
+  --surface: #f7f7f8;
+  --surface-raised: #ffffff;
+  --text: #1a1a1e;
+  --text-secondary: #62626a;
+  --border: #e4e4e7;
+  --accent: #6f4e37;
+  --accent-hover: #5a3e2b;
+  --skeleton: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  --toast-bg: #1a1a1e;
+  --toast-text: #ffffff;
+}[data-theme="dark"] {
+  --bg: #09090b;
+  --surface: #141417;
+  --surface-raised: #18181b;
+  --text: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --border: #27272a;
+  --accent: #a1785e;
+  --accent-hover: #bd9378;
+  --skeleton: linear-gradient(90deg, #18181b 25%, #27272a 50%, #18181b 75%);
+  --toast-bg: #f4f4f5;
+  --toast-text: #09090b;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); transition: background .25s, color .25s; }
+.hidden { display: none !important; }
+
+#app {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  grid-template-rows: 64px 1fr;
+  grid-template-areas:
+    "sidebar topbar"
+    "sidebar main";
+  height: 100vh;
+}
+
+/* Auth Layout */
+.auth-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--surface);
+  padding: 20px;
+}
+.auth-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
+}
+.auth-header { text-align: center; margin-bottom: 28px; }
+.auth-header h2 { margin: 10px 0 4px; font-weight: 700; }
+.auth-header p { font-size: 14px; color: var(--text-secondary); }
+
+/* Forms Elements */
+.form-group { margin-bottom: 18px; display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 13px; font-weight: 500; color: var(--text); }
+.form-group input, .form-group textarea {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: border .15s ease;
+}
+.form-group input:focus, .form-group textarea:focus { border-color: var(--accent); }
+.btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background .2s;
+  width: 100%;
+}
+.btn:hover { background: var(--accent-hover); }
+.auth-switch { text-align: center; font-size: 13px; color: var(--text-secondary); margin-top: 14px; }
+.auth-switch a { color: var(--accent); text-decoration: none; font-weight: 500; }
+
+/* Topbar & Profile UI elements */
+.topbar { grid-area: topbar; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border); background: var(--surface-raised); }
+.topbar-actions { display: flex; align-items: center; }
+.user-profile-btn { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: block; border: 1px solid var(--border); cursor: pointer; }
+.user-profile-btn img { width: 100%; height: 100%; object-fit: cover; }
+
+.sidebar { grid-area: sidebar; background: var(--surface); border-right: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.nav { display: flex; flex-direction: column; gap: 4px; }
+.nav-link { display: flex; align-items: center; text-decoration: none; color: var(--text-secondary); padding: 10px 12px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; }
+.nav-link:hover, .nav-link.active { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+
+.main { grid-area: main; overflow-y: auto; padding: 32px; background: var(--bg); }
+.view { display: none; }
+.view.active { display: block; animation: fadeIn .2s ease-out; }
+
+/* Toast Notification (FASE 2) */
+#toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
+.toast { background: var(--toast-bg); color: var(--toast-text); padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15); animation: slideIn 0.25s ease-out; min-width: 240px; }
+@keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+/* Profile View UI Components */
+.profile-card { display: flex; flex-direction: column; }
+.profile-avatar-section { display: flex; align-items: center; gap: 20px; border-bottom: 1px solid var(--border); padding-bottom: 24px; }
+.avatar-container { position: relative; width: 80px; height: 80px; border-radius: 50%; overflow: hidden; border: 2px solid var(--border); }
+.avatar-container img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-edit-label { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.65); color: #fff; font-size: 11px; text-align: center; padding: 4px 0; cursor: pointer; transition: opacity .15s; opacity: 0; }
+.avatar-container:hover .avatar-edit-label { opacity: 1; }
+.profile-meta h3 { margin: 0 0 4px; font-size: 18px; }
+.profile-meta p { color: var(--text-secondary); font-size: 14px; }
+
+/* Dashboard and general blocks */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
+.card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+.skeleton { background: var(--skeleton); background-size: 200% 100%; animation: skeleton 1.2s infinite linear; }
+@keyframes skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 768px) {
+  #app { grid-template-columns: 1fr; grid-template-areas: "topbar" "main"; }
+  .menu-toggle { display: inline-flex; }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 100; transform: translateX(-110%); transition: transform .3s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.15); }
+  .sidebar.open { transform: translateX(0); }
+}
+
+/* Toolbar & Layout de Grade de Cafés */
+.view-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.btn-auto { width: auto; padding: 10px 20px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; background: var(--surface); padding: 12px; border-radius: var(--radius); border: 1px solid var(--border); }
+.toolbar input { flex: 2; min-width: 200px; background: var(--surface-raised); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); outline: none; }
+.toolbar select { background: var(--surface-raised); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); outline: none; cursor: pointer; }
+.toolbar .icon-btn.active { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: var(--accent); color: var(--accent); }
+
+/* Layout Grid dos Cafés */
+.coffee-grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+.coffee-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; position: relative; transition: transform 0.2s, border-color 0.2s; }
+.coffee-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+
+.coffee-card-img-wrapper { width: 100%; height: 160px; background: var(--surface); display: flex; align-items: center; justify-content: center; position: relative; border-bottom: 1px solid var(--border); cursor: pointer; }
+.coffee-card-img-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+.coffee-card-img-wrapper .placeholder-icon { font-size: 40px; opacity: 0.4; }
+
+.coffee-card-fav { position: absolute; top: 12px; right: 12px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: 50%; padding: 6px; cursor: pointer; font-size: 14px; z-index: 5; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.coffee-card-sca { position: absolute; bottom: 12px; left: 12px; background: var(--accent); color: white; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.coffee-card-content { padding: 20px; display: flex; flex-direction: column; flex: 1; }
+.coffee-card-title { font-size: 18px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.3px;white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.coffee-card-roastery { font-size: 13px; color: var(--accent); font-weight: 500; margin-bottom: 12px; }
+.coffee-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.coffee-notes-tags { font-size: 12px; font-style: italic; color: var(--text); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+
+.coffee-card-actions { display: flex; gap: 8px; margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: var(--radius-sm); width: auto; font-weight: 500; }
+.btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-secondary:hover { background: var(--surface); }
+.btn-danger-text { background: transparent; border: none; color: #ff4d4d; cursor: pointer; font-size: 12px; font-weight: 500; margin-left: auto; padding: 6px; }
+
+/* Modais de Cobertura Overlay */
+.modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; backdrop-filter: blur(4px); }
+.modal-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); width: 100%; max-width: 580px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); animation: modalFadeUp 0.2s ease-out; max-height: 90vh; display: flex; flex-direction: column; }
+@keyframes modalFadeUp { from { transform: translateY(15px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.modal-header h2 { font-size: 18px; margin: 0; font-weight: 600; }
+.modal-close { background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; }
+.modal-body { padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); padding: 16px 24px; margin-top: 10px; }
+
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; margin-bottom: 0; }
+.flex-2 { flex: 2 !important; }
+.flex-1 { flex: 1 !important; }
+
+/* Tabela de Estoque e Badges */
+.stock-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.stock-table th, .stock-table td { padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.stock-table th { background: var(--surface); font-weight: 600; color: var(--text-secondary); }
+.stock-table tbody tr:hover { background: color-mix(in srgb, var(--surface) 40%, transparent); }
+
+/* Badges Customizados */
+.badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; }
+.badge-success { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.badge-warning { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+.badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 600; }
+
+.history-log-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.history-log-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.history-log-meta { display: flex; flex-direction: column; gap: 2px; }
+.history-log-date { font-size: 11px; color: var(--text-secondary); }
+.qty-change-tag { font-family: monospace; font-weight: 700; font-size: 14px; }
+.qty-positive { color: #22c55e; }
+.qty-negative { color: #ef4444; }
+.qty-neutral { color: var(--text-secondary); }
+
+/* Badges de Proporção e Etapas de Receita */
+.recipe-ratio-tag { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); font-weight: 600; padding: 2px 6px; border-radius: var(--radius-sm); font-size: 11px; font-family: monospace; }
+.recipe-method-badge { font-size: 11px; font-weight: 700; background: var(--surface); padding: 4px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text-secondary); text-transform: uppercase; align-self: flex-start; margin-bottom: 8px; }
+
+.recipe-step-entry { display: flex; gap: 8px; align-items: center; }
+.recipe-step-entry input { flex: 1; }
+.btn-remove-step { background: transparent; border: none; color: #ff4d4d; cursor: pointer; font-size: 16px; padding: 4px 8px; }
+
+.recipe-preview-steps { background: var(--surface); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 10px; list-style: decimal inside; font-size: 12px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px; 
+}
+
+/* FASE 6 - Motor Inteligente */
+#motor-feedback {
+    padding: 6px 12px;
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+/* ... (Manter todo o resto intacto) */
+
+/* FASE 7 - MODO GUIADO E CRONÔMETRO */
+.guided-fullscreen-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px;
+}
+.guided-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 20px;
+}
+.guided-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 40px;
+    max-width: 600px;
+    margin: 0 auto;
+    width: 100%;
+}
+.timer-display-block {
+    text-align: center;
+}
+#guided-timer {
+    font-size: 110px;
+    font-weight: 700;
+    font-family: monospace, monospace;
+    letter-spacing: -2px;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: 12px;
+}
+#guided-step-indicator {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--accent);
+}
+.guided-next-step-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 16px;
+    border-radius: var(--radius);
+    width: 100%;
+    text-align: center;
+}
+#guided-next-step-text {
+    margin: 6px 0 0 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+.guided-controls {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    justify-content: center;
+}
+
+/* --- ESTILOS DO DIÁRIO SENSORIAL & GRID CARDS --- */
+.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  width: 100%;
+}
+
+/* Garante que views ocultas fiquem totalmente escondidas */
+.view {
+  display: none;
+  width: 100%;
+}
+
+.view.active {
+  display: block;
+}
+
+/* Modal e overlays */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none !important;
+}
+
+.modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* FASE 10 - EXPLORADOR SENSORIAL */
+.flavor-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+}
+.flavor-btn {
+    border: none;
+    padding: 16px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.flavor-btn:hover {
+    transform: translateY(-2px);
+    opacity: 0.9;
+}
+
+/* --- CORREÇÃO DE TEMA DO CHATBOT --- */
+
+/* Container Pai Trava a Altura */
+.ai-chat-wrapper {
+  display: flex;
+  height: calc(100vh - 60px);
+  width: 100%;
+  overflow: hidden;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* Sidebar Lateral */
+.ai-sidebar {
+  width: 260px;
+  background-color: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.ai-sidebar-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn-new-chat {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-new-chat:hover {
+  background: var(--bg);
+}
+
+.ai-sessions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+/* Área Principal do Chat */
+.ai-chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 1. Div Superior (Header) */
+.ai-chat-header {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--surface);
+  flex-shrink: 0;
+}
+
+.btn-hamburger {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-hamburger:hover {
+  background-color: var(--surface-raised);
+  color: var(--text);
+}
+
+.ai-chat-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* 2. Container de Mensagens (Scrollável) */
+.ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg);
+}
+
+/* 3. Rodapé Fixo (Input + Botão) */
+.ai-chat-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background-color: var(--surface);
+  flex-shrink: 0;
+}
+
+.ai-chat-form input {
+  flex: 1;
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+}
+
+.ai-chat-form input::placeholder {
+  color: var(--text-secondary);
+}
+
+.ai-chat-form input:focus {
+  border-color: var(--accent);
+}
+
+.btn-send {
+  background-color: var(--accent);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-send:hover {
+  background-color: var(--accent-hover);
+}
+
+/* --- FORÇAR TEMA NAS BOLHAS DE MENSAGEM DO CHAT --- */
+
+/* Texto geral dentro da área de mensagens */
+.ai-chat-messages * {
+  color: var(--text);
+}
+
+/* Balões de mensagem genéricos criados dinamicamente */
+.ai-chat-messages div[style*="background"],
+.ai-chat-messages .chat-bubble,
+.ai-chat-messages .message {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+/* Se a mensagem for do usuário, mantém o destaque */
+.ai-chat-messages .user-message,
+.ai-chat-messages .message-user {
+  background-color: var(--accent) !important;
+  color: #ffffff !important;
+}
+
+/* --- REGRA DEFINITIVA PARA O TEMA DO CHATBOT --- */
+
+#view-ai,
+#view-ai .ai-chat-wrapper,
+#view-ai .ai-chat-messages {
+  background-color: var(--bg) !important;
+  color: var(--text) !important;
+}
+
+#view-ai .ai-sidebar,
+#view-ai .ai-chat-header,
+#view-ai .ai-chat-form {
+  background-color: var(--surface) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+#view-ai .btn-new-chat,
+#view-ai .btn-hamburger {
+  background-color: var(--surface-raised) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+#view-ai .ai-sessions-list,
+#view-ai .ai-sessions-list * {
+  color: var(--text) !important;
+}
+
+#view-ai .ai-chat-form input {
+  background-color: var(--bg) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+#view-ai .ai-chat-form input::placeholder {
+  color: var(--text-secondary) !important;
+}
+
+/* Estilo para os Selects (Filtros) harmonizarem com os temas */
+select.input {
+  background-color: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+select.input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Opcional: Estilizar as opções que abrem no select (Dropdown) */
+select.input option {
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+/* ==========================================
+   FASE 14 — PWA
+========================================== */
+
+.offline-indicator {
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 3000;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 10px 16px;
+
+    background: var(--surface-raised);
+    color: var(--text);
+
+    border: 1px solid var(--border);
+    border-radius: 999px;
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.15);
+
+    font-size: 12px;
+    font-weight: 500;
+
+    animation:
+        fadeIn 0.2s ease-out;
+}
+
+.offline-indicator-icon {
+    color: #ef4444;
+    font-size: 10px;
+}
+
+.install-pwa-btn {
+    width: auto;
+
+    padding: 7px 12px;
+
+    border:
+        1px solid var(--border);
+
+    border-radius:
+        var(--radius-sm);
+
+    background:
+        var(--surface);
+
+    color:
+        var(--text);
+
+    font-family:
+        var(--font);
+
+    font-size:
+        12px;
+
+    font-weight:
+        600;
+
+    cursor:
+        pointer;
+
+    transition:
+        background 0.2s,
+        border-color 0.2s;
+}
+
+.install-pwa-btn:hover {
+    background:
+        var(--surface-raised);
+
+    border-color:
+        var(--accent);
+}
+
+@media (max-width: 768px) {
+
+    .offline-indicator {
+        width: calc(100% - 32px);
+
+        justify-content: center;
+
+        text-align: center;
+
+        top: 72px;
+    }
+
+    .install-pwa-btn {
+        padding:
+            6px 10px;
+    }
+}
+
+/* Padronização de Inputs, Textareas e Selects nas Modais */
+.input-field,
+.modal-body select,
+.modal-body input,
+.modal-body textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.input-field:focus,
+.modal-body select:focus,
+.modal-body input:focus,
+.modal-body textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+/* Refinamento de Comportamento e Rolagem das Modais */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 16px;
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 580px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  animation: modalFadeUp 0.2s ease-out;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Mantém as bordas arredondadas intactas */
+}
+
+.modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0; /* Não encolhe */
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto; /* Apenas o conteúdo interno rola */
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+  flex-shrink: 0; /* Fica sempre fixo na base */
+  margin-top: 0;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, color .15s;
+}
+
+.modal-close:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+
+@media (max-width: 600px) {
+  .modal-card {
+    max-height: 92vh;
+    border-radius: var(--radius-sm);
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-header, .modal-footer {
+    padding: 14px 16px;
+  }
+}
