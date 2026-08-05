@@ -97,6 +97,57 @@
     const OFFLINE_STORE = "api_cache";
 
     let offlineDBPromise = null;
+    let isSyncingOfflineQueue = false;
+
+    function getTokenPayload() {
+        const token = state.token || localStorage.getItem("coffee_lab_token") || localStorage.getItem("token");
+        if (!token || !token.includes(".")) return null;
+
+        try {
+            const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+            return JSON.parse(atob(payload));
+        } catch (error) {
+            console.warn("[Offline] Nao foi possivel ler o payload do token:", error);
+            return null;
+        }
+    }
+
+    function getCurrentUserCacheKey() {
+        const tokenPayload = getTokenPayload();
+        const userKey =
+            state.user?.id ||
+            state.user?.email ||
+            tokenPayload?.sub ||
+            "anonymous";
+
+        return String(userKey).toLowerCase();
+    }
+
+    function getOfflineCacheKey(endpoint) {
+        return `${getCurrentUserCacheKey()}::${endpoint}`;
+    }
+
+    function shouldSkipOfflineQueue(endpoint, method, body) {
+        const normalizedEndpoint = String(endpoint || "");
+
+        if (method === "GET") return true;
+        if (normalizedEndpoint.startsWith("/api/ai/")) return true;
+        if (normalizedEndpoint.startsWith("/api/auth/")) return true;
+        if (body instanceof FormData) return true;
+
+        return false;
+    }
+
+    async function getStockBaseUpdatedAt(endpoint) {
+        const match = String(endpoint || "").match(/^\/api\/stock\/(\d+)/);
+        if (!match) return null;
+
+        const cachedStock = await getOfflineCache("/api/stock");
+        if (!Array.isArray(cachedStock)) return null;
+
+        const stockItem = cachedStock.find(item => String(item.id) === match[1]);
+        return stockItem?.updated_at || null;
+    }
 
     function openOfflineDB() {
         if (offlineDBPromise) {
@@ -167,8 +218,12 @@
                             OFFLINE_STORE
                         );
 
+                    const cacheKey = getOfflineCacheKey(endpoint);
+
                     store.put({
-                        key: endpoint,
+                        key: cacheKey,
+                        endpoint,
+                        owner: getCurrentUserCacheKey(),
                         data,
                         updatedAt:
                             new Date().toISOString()
@@ -178,7 +233,7 @@
                         () => {
                             console.log(
                                 "[Offline] Cache salvo:",
-                                endpoint
+                                cacheKey
                             );
 
                             resolve();
@@ -228,8 +283,9 @@
                             OFFLINE_STORE
                         );
 
+                    const cacheKey = getOfflineCacheKey(endpoint);
                     const request =
-                        store.get(endpoint);
+                        store.get(cacheKey);
 
                     request.onsuccess =
                         () => {
@@ -244,7 +300,7 @@
 
                             console.log(
                                 "[Offline] Cache encontrado:",
-                                endpoint
+                                cacheKey
                             );
 
                             resolve(
@@ -426,6 +482,13 @@ async function apiFetch(
                     "DELETE"
                 ].includes(method)
             ) {
+                if (shouldSkipOfflineQueue(endpoint, method, options.body)) {
+                    throw new Error(
+                        endpoint.startsWith("/api/ai/")
+                            ? "Barista IA indisponivel offline."
+                            : "Esta acao precisa de conexao com a internet."
+                    );
+                }
 
                 let body = options.body;
 
@@ -437,10 +500,11 @@ async function apiFetch(
                     }
                 }
 
-                const queuedAction = addToOfflineQueue({
+                const queuedAction = await addToOfflineQueue({
                     endpoint,
                     method,
-                    body
+                    body,
+                    baseUpdatedAt: await getStockBaseUpdatedAt(endpoint)
                 });
 
                 showToast(
@@ -550,22 +614,43 @@ async function apiFetch(
         } 
     } 
     
-        function updateUserDOM(user) {
-            const avatarImg = document.getElementById('user-avatar');
-            if (!avatarImg) return;
+        function updateUserDOM(user = state.user) {
+            const avatarImgs = [
+                document.getElementById('user-avatar-mini'),
+                document.getElementById('profile-avatar-big')
+            ].filter(Boolean);
+            if (avatarImgs.length === 0) return;
+
+            if (welcomeTitle && user?.name) {
+                welcomeTitle.innerText = `Bem-vindo, ${user.name}!`;
+            }
+            if (profileNameDisplay && user?.name) {
+                profileNameDisplay.innerText = user.name;
+            }
+            if (profileEmailDisplay && user?.email) {
+                profileEmailDisplay.innerText = user.email;
+            }
+            const profileNameInput = document.getElementById('profile-name');
+            const profileBioInput = document.getElementById('profile-bio');
+            if (profileNameInput && user?.name) {
+                profileNameInput.value = user.name;
+            }
+            if (profileBioInput && user?.bio !== undefined && user?.bio !== null) {
+                profileBioInput.value = user.bio;
+            }
 
             // SVG genérico embutido em base64 que funciona 100% offline
             const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
-            avatarImg.onerror = () => {
-                avatarImg.src = defaultAvatar;
-            };
+            avatarImgs.forEach((avatarImg) => {
+                avatarImg.onerror = () => {
+                    avatarImg.src = defaultAvatar;
+                };
 
-            if (navigator.onLine && user && user.avatar_url) {
-                avatarImg.src = user.avatar_url;
-            } else {
-                avatarImg.src = defaultAvatar;
-            }
+                avatarImg.src = navigator.onLine && user?.avatar_url
+                    ? user.avatar_url
+                    : defaultAvatar;
+            });
             }
     
         // --- FASE 3: GRÃOS ESPECIAIS --- 
@@ -1976,18 +2061,13 @@ window.deleteBeverage = async (id) => {
     async function loadAiSessions(autoSelect = false) { 
     if (!sessionsListContainer) return; 
 
-    if (!navigator.onLine) {
+    if (false && !navigator.onLine) {
         sessionsListContainer.innerHTML = '<div style="padding: 10px; font-size: 12px; color: #a1a1aa; text-align: center;">Barista IA indisponível offline.</div>';
         return;
     }
 
     try { 
-        const token = state.token || localStorage.getItem("coffee_lab_token") || localStorage.getItem("token"); 
-        const response = await fetch('/api/ai/sessions', { 
-        headers: { 'Authorization': `Bearer ${token}` } 
-        }); 
-        if (!response.ok) return; 
-        const sessions = await response.json(); 
+        const sessions = await apiFetch('/api/ai/sessions');
         sessionsListContainer.innerHTML = ''; 
 
         if (sessions.length === 0) return; 
@@ -2096,22 +2176,16 @@ window.deleteBeverage = async (id) => {
     currentAiSessionId = sessionId; 
     if (chatMessagesContainer) chatMessagesContainer.innerHTML = ''; 
 
-    if (!navigator.onLine) {
+    if (false && !navigator.onLine) {
         appendChatMessage('assistant', '⚠️ Barista IA indisponível offline.');
         return;
     }
 
     try { 
-        const token = state.token || localStorage.getItem("coffee_lab_token") || localStorage.getItem("token"); 
-        const response = await fetch(`/api/ai/sessions/${sessionId}/messages`, { 
-        headers: { 'Authorization': `Bearer ${token}` } 
-        }); 
-        if (response.ok) { 
-        const messages = await response.json(); 
+        const messages = await apiFetch(`/api/ai/sessions/${sessionId}/messages`);
         messages.forEach(msg => { 
             appendChatMessage(msg.role, msg.content); 
         }); 
-        } 
     } catch (err) { 
         console.error("Erro ao carregar mensagens da sessão:", err); 
         appendChatMessage('assistant', '⚠️ Barista IA indisponível offline.');
@@ -2188,7 +2262,7 @@ window.deleteBeverage = async (id) => {
             const coffeesData = await apiFetch('/api/coffees').catch(() => []); 
             const coffees = Array.isArray(coffeesData) ? coffeesData : []; 
     
-            const sensoryData = await apiFetch('/api/sensory_logs').catch(() => []); 
+            const sensoryData = await apiFetch('/api/sensory-logs').catch(() => []); 
             const sensory = Array.isArray(sensoryData) ? sensoryData : []; 
             
             // --- LER OS FILTROS DA TELA --- 
@@ -2302,8 +2376,8 @@ window.deleteBeverage = async (id) => {
             const filteredSensory = sensory.filter(log => extractions.some(e => e.id === 
     log.extraction_id)); 
             if (filteredSensory.length > 0) { 
-                const total = filteredSensory.reduce((acc, log) => acc + ((log.aroma + log.acidity + 
-    log.body + log.sweetness + log.aftertaste) / 5), 0); 
+                const total = filteredSensory.reduce((acc, log) => acc + ((log.aroma_score + log.acidity_score + 
+    log.body_score + log.sweetness_score + log.aftertaste_score) / 5), 0); 
                 avgRating = (total / filteredSensory.length).toFixed(1) + " / 10"; 
             } 
     
@@ -2476,7 +2550,16 @@ window.deleteBeverage = async (id) => {
             if (!installButton) { 
                 return; 
             } 
-    
+
+            const isStandalone =
+                window.matchMedia("(display-mode: standalone)").matches ||
+                window.navigator.standalone === true;
+
+            if (isStandalone) {
+                installButton.classList.add("hidden");
+                return;
+            }
+     
             window.addEventListener( 
                 "beforeinstallprompt", 
                 (event) => { 
@@ -2619,13 +2702,18 @@ window.deleteBeverage = async (id) => {
     ); 
     
         // ## "Backup" ofline no localStorage inicialmente ## // 
-    const OFFLINE_QUEUE_KEY = 
-        "coffee_lab_offline_queue"; 
+    const OFFLINE_QUEUE_KEY =
+        "coffee_lab_offline_queue";
+
+    function getOfflineQueueKey() {
+        return `${OFFLINE_QUEUE_KEY}:${getCurrentUserCacheKey()}`;
+    }
     
     function getOfflineQueue() { 
         try { 
             const queue = JSON.parse( 
-                localStorage.getItem(OFFLINE_QUEUE_KEY) || "[]" 
+                localStorage.getItem(getOfflineQueueKey()) ||
+                "[]"
             ); 
     
             return Array.isArray(queue) 
@@ -2646,11 +2734,14 @@ window.deleteBeverage = async (id) => {
         try { 
             if (!queue || queue.length === 0) { 
                 localStorage.removeItem( 
-                    OFFLINE_QUEUE_KEY 
+                    getOfflineQueueKey()
                 ); 
+                localStorage.removeItem(
+                    OFFLINE_QUEUE_KEY
+                );
             } else { 
                 localStorage.setItem( 
-                    OFFLINE_QUEUE_KEY, 
+                    getOfflineQueueKey(),
                     JSON.stringify(queue) 
                 ); 
             } 
@@ -2665,7 +2756,7 @@ window.deleteBeverage = async (id) => {
         } 
     } 
     
-    function addToOfflineQueue(action) { 
+    async function addToOfflineQueue(action) {
         try { 
             const queue = 
                 getOfflineQueue(); 
@@ -2679,7 +2770,13 @@ window.deleteBeverage = async (id) => {
                 method: 
                     action.method, 
                 body: 
-                    action.body ?? null 
+                    action.body ?? null,
+                baseUpdatedAt:
+                    action.baseUpdatedAt || null,
+                failedPermanently:
+                    false,
+                lastError:
+                    null
             }; 
     
             queue.push(newAction); 
@@ -2706,7 +2803,7 @@ window.deleteBeverage = async (id) => {
     // ==========================================
     // 1. SINCRONIZAÇÃO DA FILA OFFLINE
     // ==========================================
-    async function processOfflineQueue() {
+    async function processOfflineQueueLegacy() {
     let queue = [];
     try {
         queue = JSON.parse(localStorage.getItem('coffee_lab_offline_queue') || '[]');
@@ -2778,6 +2875,131 @@ window.deleteBeverage = async (id) => {
     }
     
         // --- EVENTOS DE NAVEGAÇÃO E ENCERRAMENTO --- 
+    async function hasStockConflict(action, headers) {
+        if (
+            !action.baseUpdatedAt ||
+            action.method !== "PUT" ||
+            !String(action.endpoint || "").startsWith("/api/stock/")
+        ) {
+            return false;
+        }
+
+        const stockId = String(action.endpoint).match(/^\/api\/stock\/(\d+)/)?.[1];
+        if (!stockId) return false;
+
+        const response = await fetch("/api/stock", { headers });
+        if (!response.ok) return false;
+
+        const stock = await response.json();
+        const current = Array.isArray(stock)
+            ? stock.find(item => String(item.id) === stockId)
+            : null;
+
+        if (!current?.updated_at) return false;
+
+        return new Date(current.updated_at).getTime() > new Date(action.baseUpdatedAt).getTime();
+    }
+
+    async function processOfflineQueue() {
+        if (isSyncingOfflineQueue || !navigator.onLine) return;
+
+        isSyncingOfflineQueue = true;
+
+        try {
+            const queue = getOfflineQueue()
+                .slice()
+                .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
+            if (queue.length === 0) return;
+
+            console.log(`[Offline] Sincronizando ${queue.length} acao(oes).`);
+            const remainingActions = [];
+            let syncedCount = 0;
+
+            for (const action of queue) {
+                try {
+                    if (action.failedPermanently) {
+                        remainingActions.push(action);
+                        continue;
+                    }
+
+                    const endpoint = action.endpoint || action.url;
+                    const headers = action.headers || {};
+
+                    if (state.token && !headers.Authorization) {
+                        headers.Authorization = `Bearer ${state.token}`;
+                    }
+
+                    if (action.body !== null && action.body !== undefined && !headers["Content-Type"]) {
+                        headers["Content-Type"] = "application/json";
+                    }
+
+                    if (await hasStockConflict(action, headers)) {
+                        remainingActions.push({
+                            ...action,
+                            failedPermanently: true,
+                            lastError: "Conflito de estoque: o registro mudou em outro dispositivo antes da sincronizacao."
+                        });
+                        showToast(
+                            "Conflito de estoque detectado. A acao offline foi mantida na fila para revisao.",
+                            "error"
+                        );
+                        continue;
+                    }
+
+                    const response = await fetch(endpoint, {
+                        method: action.method,
+                        headers,
+                        body: action.body !== null && action.body !== undefined ? JSON.stringify(action.body) : undefined
+                    });
+
+                    if (response.ok) {
+                        console.log("[Offline] Sincronizado com sucesso:", endpoint);
+                        syncedCount++;
+                        continue;
+                    }
+
+                    if (response.status === 408 || response.status === 429 || response.status >= 500) {
+                        remainingActions.push(action);
+                        continue;
+                    }
+
+                    const errorBody = await response.text().catch(() => "");
+                    remainingActions.push({
+                        ...action,
+                        failedPermanently: true,
+                        lastError: `Erro permanente ${response.status}: ${errorBody || response.statusText}`
+                    });
+                    showToast(
+                        "Uma acao offline nao pode ser sincronizada e foi mantida na fila.",
+                        "error"
+                    );
+                } catch (error) {
+                    console.error("[Offline] Erro de rede durante a sincronizacao:", error);
+                    remainingActions.push(action);
+                }
+            }
+
+            saveOfflineQueue(remainingActions);
+
+            if (remainingActions.length === 0 && syncedCount > 0) {
+                showToast("Dados offline sincronizados com sucesso!", "success");
+            } else if (syncedCount > 0) {
+                showToast(`${syncedCount} acao(oes) sincronizada(s). ${remainingActions.length} ainda precisam de atencao.`, "info");
+            }
+
+            if (syncedCount > 0 && typeof route === "function") {
+                route();
+            }
+        } finally {
+            if (typeof updateConnectionStatus === "function") {
+                updateConnectionStatus();
+            }
+
+            isSyncingOfflineQueue = false;
+        }
+    }
+
         window.addEventListener('hashchange', route); 
         document.addEventListener('DOMContentLoaded', () => { 
             checkAuthUI(); 

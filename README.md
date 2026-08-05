@@ -1,1 +1,151 @@
-# coffeeLab
+# Coffee Lab
+
+Coffee Lab e uma aplicacao web para gerenciar cafes especiais, estoque, receitas, extracoes, diario sensorial, bebidas autorais, estatisticas e um Barista de IA integrado via OpenRouter.
+
+O projeto usa FastAPI, SQLAlchemy 2.0, PostgreSQL/NeonDB e frontend Vanilla HTML/CSS/JavaScript com suporte PWA.
+
+## Funcionalidades
+
+- Cadastro, login, perfil, avatar e sessao persistente.
+- Biblioteca de cafes com CRUD, fotos, favoritos, busca, filtros e ordenacao.
+- Controle de estoque com compras, abertura de pacotes, ajustes e historico de movimentacoes.
+- Livro de receitas com etapas, favoritos, duplicacao e modo guiado.
+- Cronometro de preparo com registro automatico de extracao.
+- Diario sensorial e explorador de perfil sensorial.
+- Caderno de bebidas.
+- Barista de IA com historico de conversas.
+- Dashboard de estatisticas com Chart.js.
+- PWA instalavel com app shell offline, cache de GETs e fila de escritas offline.
+
+## Stack
+
+- Python 3.12+
+- FastAPI
+- SQLAlchemy 2.0
+- Alembic
+- Pydantic 2
+- PostgreSQL/NeonDB
+- HTML5, CSS3 e JavaScript Vanilla
+- Chart.js
+- OpenRouter API
+
+## Estrutura
+
+```text
+.
+├── main.py                 # Rotas FastAPI, API e servidor do frontend
+├── core.py                 # Configuracoes, banco, modelos SQLAlchemy e schemas Pydantic
+├── requirements.txt        # Dependencias Python
+├── alembic.ini             # Configuracao Alembic
+├── alembic/                # Ambiente de migracoes
+├── static/
+│   ├── index.html          # SPA
+│   ├── css/style.css       # Interface
+│   ├── js/app.js           # Logica do frontend, offline e PWA
+│   ├── manifest.json       # Manifest PWA
+│   └── icons/              # Icones PWA
+└── sw.js                   # Service Worker
+```
+
+## Configuracao Local
+
+Crie e ative um ambiente virtual:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Instale as dependencias:
+
+```bash
+pip install -r requirements.txt
+```
+
+Crie um arquivo `.env` na raiz:
+
+```env
+DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@HOST/DBNAME?sslmode=require
+SECRET_KEY=troque-por-uma-chave-longa-e-segura
+OPENROUTER_API_KEY=sua-chave-openrouter
+APP_ENV=development
+```
+
+Observacoes:
+
+- Use a connection string do NeonDB em `DATABASE_URL`.
+- `OPENROUTER_API_KEY` e necessaria apenas para o Barista de IA.
+- Nunca use o valor padrao de `SECRET_KEY` em producao.
+
+## Banco de Dados
+
+O app cria as tabelas automaticamente no startup via SQLAlchemy para facilitar desenvolvimento local. O projeto tambem possui Alembic configurado para evolucao controlada do schema.
+
+Comandos uteis:
+
+```bash
+alembic revision --autogenerate -m "describe change"
+alembic upgrade head
+```
+
+## Executar
+
+```bash
+uvicorn main:app --reload
+```
+
+Acesse:
+
+```text
+http://localhost:8000
+```
+
+## PWA e Offline
+
+A Fase 14 implementa:
+
+- Manifest PWA valido.
+- Service Worker versionado.
+- App shell em cache.
+- Navegacao offline.
+- Sessao local persistente.
+- Cache IndexedDB para requisicoes GET por usuario.
+- Fila offline para POST, PUT, PATCH e DELETE de dados da aplicacao.
+- Sincronizacao automatica quando a conexao retorna.
+- Protecao contra sincronizacoes simultaneas.
+- Tratamento de erro temporario e permanente.
+- Barista IA bloqueado para novas mensagens offline.
+- Historico da IA cacheavel quando carregado previamente.
+
+O Service Worker nao intercepta `/api/`, evitando cache inseguro de autenticacao ou respostas da IA. Dados de API sao controlados por `apiFetch()` em `static/js/app.js`.
+
+## Testes Manuais Recomendados
+
+1. Online: criar conta, logar, navegar por todas as secoes e cadastrar dados.
+2. Cache offline: abrir cafes, estoque, receitas, extracoes, diario sensorial, explorador, bebidas, estatisticas e historico de IA.
+3. Desconectar internet e recarregar a pagina.
+4. Confirmar que a sessao permanece ativa e os dados carregados aparecem.
+5. Criar/editar/excluir dados offline e verificar o indicador de fila.
+6. Reconectar e confirmar sincronizacao, atualizacao da interface e fila vazia.
+7. Testar falha temporaria no servidor e confirmar que a acao fica na fila.
+8. Testar erro permanente e confirmar que a acao fica marcada para revisao.
+9. Instalar o PWA em navegador compativel e abrir novamente offline.
+10. Testar responsividade em desktop e mobile.
+
+## Producao
+
+Antes de publicar:
+
+- Configure `SECRET_KEY` forte.
+- Restrinja CORS para os dominios reais.
+- Use NeonDB com SSL.
+- Configure migracoes Alembic reais para o schema atual.
+- Valide limites e tipos de upload de imagens.
+- Revise logs e tratamento de erros.
+- Teste PWA em Chrome desktop, Android e iOS/Safari.
+
+## Status
+
+Fases 0 a 13: implementadas.
+
+Fase 14: em finalizacao, com foco em robustez offline, seguranca do cache por usuario e sincronizacao confiavel.

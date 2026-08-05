@@ -966,9 +966,9 @@ async def record_extraction(ext_in: ExtractionCreate, authorization: Annotated[s
     
     # Automação de Estoque: Se houver receita vinculada e grão definido, deduz o peso usado
     if ext_in.recipe_id:
-        rec = db.query(Recipe).filter(Recipe.id == ext_in.recipe_id).first()
+        rec = db.query(Recipe).filter(Recipe.id == ext_in.recipe_id, Recipe.user_id == u.id).first()
         if rec and rec.coffee_id:
-            stk = db.query(Stock).filter(Stock.coffee_id == rec.coffee_id).first()
+            stk = db.query(Stock).join(Coffee).filter(Stock.coffee_id == rec.coffee_id, Coffee.user_id == u.id).first()
             if stk:
                 stk.current_quantity = max(0.0, stk.current_quantity - rec.coffee_weight)
                 db.add(StockMovement(

@@ -719,6 +719,100 @@
         </div>
     </div>
 
+<!-- MODAL RECEITA -->
+<div id="recipe-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 680px;">
+        <div class="modal-header">
+            <h2 id="modal-recipe-title">Criar Nova Receita</h2>
+            <button class="modal-close" id="modal-recipe-close" type="button">x</button>
+        </div>
+        <form id="recipe-form" class="modal-body">
+            <input type="hidden" id="form-recipe-id">
+            <div class="form-row">
+                <div class="form-group flex-2">
+                    <label for="recipe-name-input">Nome da receita *</label>
+                    <input type="text" id="recipe-name-input" required placeholder="Ex: V60 doce e limpa">
+                </div>
+                <div class="form-group">
+                    <label for="recipe-method-input">Metodo *</label>
+                    <select id="recipe-method-input" required>
+                        <option value="Hario V60">Hario V60</option>
+                        <option value="Aeropress">Aeropress</option>
+                        <option value="Chemex">Chemex</option>
+                        <option value="Prensa Francesa">Prensa Francesa</option>
+                        <option value="Espresso">Espresso</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="recipe-coffee-select">Cafe vinculado</label>
+                <select id="recipe-coffee-select">
+                    <option value="">Receita Livre (Qualquer grao)</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="recipe-coffee-weight">Cafe (g) *</label>
+                    <input type="number" id="recipe-coffee-weight" step="0.1" min="0.1" required value="15">
+                </div>
+                <div class="form-group">
+                    <label for="recipe-water-weight">Agua (g) *</label>
+                    <input type="number" id="recipe-water-weight" step="1" min="1" required value="240">
+                </div>
+                <div class="form-group">
+                    <label for="recipe-temp-input">Temperatura (C)</label>
+                    <input type="number" id="recipe-temp-input" min="0" max="100" placeholder="92">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="recipe-grind-input">Moagem</label>
+                    <input type="text" id="recipe-grind-input" placeholder="Media fina, 24 cliques...">
+                </div>
+                <div class="form-group flex-2">
+                    <label for="recipe-desc-input">Descricao</label>
+                    <input type="text" id="recipe-desc-input" placeholder="Objetivo sensorial da receita">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Etapas</label>
+                <div id="recipe-steps-builder" style="display:flex; flex-direction:column; gap:8px;"></div>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-add-step-row" style="margin-top:8px;">Adicionar etapa</button>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="modal-recipe-cancel">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Receita</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL MODO GUIADO -->
+<div id="guided-mode-modal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 720px;">
+        <div class="modal-header">
+            <div>
+                <h2 id="guided-recipe-title">Receita</h2>
+                <p id="guided-method-badge" style="margin:4px 0 0; color:var(--text-secondary); font-size:13px;"></p>
+            </div>
+            <button class="modal-close" id="btn-close-guided" type="button">x</button>
+        </div>
+        <div class="modal-body" style="align-items:center; text-align:center;">
+            <div id="guided-timer" style="font-size:72px; font-family:monospace; font-weight:700;">00:00</div>
+            <div id="guided-step-indicator" style="font-size:18px; color:var(--accent); margin-top:8px;">Pronto para iniciar.</div>
+            <div class="guided-next-step-box">
+                <strong>Proxima etapa</strong>
+                <p id="guided-next-step-text">-</p>
+            </div>
+            <div class="guided-controls">
+                <button type="button" class="btn btn-primary btn-auto" id="btn-guided-playpause">Iniciar</button>
+                <button type="button" class="btn btn-secondary btn-auto" id="btn-guided-next">Proxima</button>
+                <button type="button" class="btn btn-secondary btn-auto" id="btn-guided-reset">Reiniciar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- MODAL CADERNO DE BEBIDAS (FASE 11) -->
 <div id="modal-beverage" class="modal-overlay hidden" style="display: none;">
     <div class="modal-card" style="max-width: 550px;">
@@ -800,6 +894,9 @@
     </div>
 </div>
 
+    <script>
+        document.getElementById('modal-sensory')?.remove();
+    </script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

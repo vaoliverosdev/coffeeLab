@@ -6,3 +6,4 @@ venv/
 .venv/
 alembic/versions/__pycache__/
 static/uploads/
+*.db

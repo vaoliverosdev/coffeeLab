@@ -1,4 +1,4 @@
-const CACHE_NAME = "coffee-lab-v14";
+const CACHE_NAME = "coffee-lab-v14.1";
 
 const APP_SHELL = [
     "/",
@@ -23,13 +23,13 @@ self.addEventListener("activate", (event) => {
     event.waitUntil(
         caches
             .keys()
-            .then((cacheNames) => {
-                return Promise.all(
+            .then((cacheNames) =>
+                Promise.all(
                     cacheNames
                         .filter((cacheName) => cacheName !== CACHE_NAME)
                         .map((cacheName) => caches.delete(cacheName))
-                );
-            })
+                )
+            )
             .then(() => self.clients.claim())
     );
 });
@@ -37,63 +37,59 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
     const request = event.request;
 
-    if (request.method !== "GET") {
-        return;
-    }
+    if (request.method !== "GET") return;
 
     const url = new URL(request.url);
 
-    if (url.origin !== self.location.origin) {
+    if (url.origin !== self.location.origin) return;
+    if (url.pathname.startsWith("/api/")) return;
+
+    if (request.mode === "navigate") {
+        event.respondWith(networkFirst(request, "/static/index.html"));
         return;
     }
 
-    if (url.pathname.startsWith("/api/")) {
-        return;
-    }
-
-    event.respondWith(
-        caches
-            .match(request)
-            .then((cachedResponse) => {
-                if (cachedResponse) {
-                    return cachedResponse;
-                }
-
-                return fetch(request)
-                    .then((networkResponse) => {
-                        if (
-                            !networkResponse ||
-                            networkResponse.status !== 200 ||
-                            networkResponse.type !== "basic"
-                        ) {
-                            return networkResponse;
-                        }
-
-                        const responseToCache = networkResponse.clone();
-
-                        caches
-                            .open(CACHE_NAME)
-                            .then((cache) => {
-                                cache.put(request, responseToCache);
-                            });
-
-                        return networkResponse;
-                    });
-            })
-            .catch(() => {
-                if (request.mode === "navigate") {
-                    return caches.match("/");
-                }
-
-                return new Response(
-                    "Conteúdo indisponível offline.",
-                    {
-                        status: 503,
-                        headers: {
-                            "Content-Type": "text/plain; charset=utf-8"
-                        }
-                    }
-                );
-            })
-    );
+    event.respondWith(staleWhileRevalidate(request));
 });
+
+async function networkFirst(request, fallbackPath) {
+    const cache = await caches.open(CACHE_NAME);
+
+    try {
+        const response = await fetch(request);
+        if (response && response.ok) {
+            cache.put(request, response.clone());
+        }
+        return response;
+    } catch {
+        return (
+            (await cache.match(request)) ||
+            (await cache.match(fallbackPath)) ||
+            (await cache.match("/"))
+        );
+    }
+}
+
+async function staleWhileRevalidate(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const cachedResponse = await cache.match(request);
+
+    const networkResponsePromise = fetch(request)
+        .then((response) => {
+            if (response && response.ok && response.type === "basic") {
+                cache.put(request, response.clone());
+            }
+            return response;
+        })
+        .catch(() => null);
+
+    return cachedResponse || (await networkResponsePromise) || new Response(
+        "Conteudo indisponivel offline.",
+        {
+            status: 503,
+            headers: {
+                "Content-Type": "text/plain; charset=utf-8"
+            }
+        }
+    );
+}
