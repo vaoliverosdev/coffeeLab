@@ -79,9 +79,17 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 @app.post("/api/auth/login", response_model=Token)
 def login(credentials: UserLogin, db: Session = Depends(get_db)):
     u = db.query(User).filter(User.email == credentials.email).first()
-    if not u or not verify_password(credentials.password, u.hashed_password): 
-        raise HTTPException(status_code=401, detail="Credenciais incorretas.")
+    if not u:
+        raise HTTPException(status_code=404, detail="Conta não encontrada para este e-mail.")
+    if not verify_password(credentials.password, u.hashed_password):
+        raise HTTPException(status_code=401, detail="Senha incorreta.")
     return {"access_token": create_access_token(data={"sub": u.email}), "token_type": "bearer", "user": u}
+
+@app.post("/api/auth/recover")
+def recover_password(req: PasswordRecoveryRequest, db: Session = Depends(get_db)):
+    # Resposta neutra para evitar enumeração de contas. O envio real de e-mail entra em fase posterior.
+    db.query(User).filter(User.email == req.email).first()
+    return {"detail": "Se este e-mail estiver cadastrado, as instruções de recuperação serão enviadas."}
 
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_me(authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
@@ -98,8 +106,10 @@ async def update_profile(profile_data: ProfileUpdate, authorization: Annotated[s
 @app.post("/api/auth/me/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Envie um arquivo de imagem válido.")
     ext = os.path.splitext(file.filename)[1]
-    filename = f"user_{u.id}_{int(os.path.getmtime(Path(__file__).parent))}{ext}"
+    filename = f"user_{u.id}_{int(datetime.utcnow().timestamp())}{ext}"
     with open(AVATAR_DIR / filename, "wb") as b: shutil.copyfileobj(file.file, b)
     u.avatar_url = f"/static/uploads/avatars/{filename}"
     db.commit()
@@ -320,6 +330,23 @@ async def create_beverage(
     db.commit()
     db.refresh(new_bev)
     return new_bev
+
+@app.put("/api/beverages/{bev_id}", response_model=BeverageResponse)
+async def update_beverage(
+    bev_id: int,
+    data: BeverageCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db)
+):
+    u = await get_current_user(db, token=authorization)
+    bev = db.query(Beverage).filter(Beverage.id == bev_id, Beverage.user_id == u.id).first()
+    if not bev:
+        raise HTTPException(status_code=404, detail="Bebida não encontrada")
+    for k, v in data.model_dump().items():
+        setattr(bev, k, v)
+    db.commit()
+    db.refresh(bev)
+    return bev
 
 @app.delete("/api/beverages/{bev_id}")
 async def delete_beverage(

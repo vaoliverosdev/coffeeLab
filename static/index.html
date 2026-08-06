@@ -821,6 +821,7 @@
             <button type="button" class="modal-close" onclick="const m = document.getElementById('modal-beverage'); m.classList.add('hidden'); m.style.display='none';">✕</button>
         </div>
         <form id="beverage-form" class="modal-body" style="display:flex; flex-direction:column; gap: 12px; margin-top: 15px;">
+            <input type="hidden" id="bev-id">
             <div>
                 <label for="bev-name">Nome da Bebida *</label>
                 <input type="text" id="bev-name" class="input-field" required placeholder="Ex: Espresso Tônica, Cappuccino...">

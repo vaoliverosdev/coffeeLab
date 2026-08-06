@@ -799,3 +799,117 @@ select.input option {
     padding: 14px 16px;
   }
 }
+
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+
+  #app {
+    min-height: 100dvh;
+  }
+
+  .topbar {
+    padding: 0 14px;
+    gap: 10px;
+  }
+
+  .main {
+    padding: 18px 14px 28px;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    width: min(82vw, 300px);
+  }
+
+  .view-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .view-header .btn,
+  .view-header .btn-auto {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar input,
+  .toolbar select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cards,
+  .coffee-grid-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 18px;
+    overflow-x: auto;
+  }
+
+  .modal-card {
+    width: min(100%, 94vw);
+  }
+
+  .modal-overlay {
+    padding: 10px;
+    align-items: flex-start;
+  }
+
+  .form-row,
+  .profile-avatar-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stock-table,
+  table {
+    min-width: 680px;
+  }
+
+  .ai-chat-wrapper {
+    height: calc(100dvh - 64px);
+    flex-direction: column;
+  }
+
+  .ai-sidebar {
+    width: 100%;
+    max-height: 220px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ai-chat-messages {
+    padding: 14px;
+  }
+
+  .ai-chat-form {
+    padding: 10px;
+  }
+
+  .ai-chat-form input {
+    min-width: 0;
+  }
+
+  #toast-container {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .toast {
+    min-width: 0;
+    width: 100%;
+  }
+}
