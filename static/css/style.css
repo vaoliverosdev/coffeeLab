@@ -43,6 +43,18 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
   height: 100vh;
 }
 
+#app.sidebar-collapsed {
+  grid-template-columns: 0 1fr;
+}
+
+#app.sidebar-collapsed .sidebar {
+  transform: translateX(-100%);
+  overflow: hidden;
+  padding-left: 0;
+  padding-right: 0;
+  border-right: 0;
+}
+
 /* Auth Layout */
 .auth-wrapper {
   display: flex;
@@ -135,6 +147,7 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 
 @media (max-width: 768px) {
   #app { grid-template-columns: 1fr; grid-template-areas: "topbar" "main"; }
+  #app.sidebar-collapsed { grid-template-columns: 1fr; }
   .menu-toggle { display: inline-flex; }
   .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 260px; z-index: 100; transform: translateX(-110%); transition: transform .3s ease; box-shadow: 4px 0 24px rgba(0,0,0,0.15); }
   .sidebar.open { transform: translateX(0); }

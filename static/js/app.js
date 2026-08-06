@@ -3294,7 +3294,11 @@ window.editBeverage = async (id) => {
             checkAuthUI();
             const sidebar = document.querySelector('.sidebar');
             document.querySelector('.menu-toggle')?.addEventListener('click', () => {
-                sidebar?.classList.toggle('open');
+                if (window.matchMedia('(max-width: 768px)').matches) {
+                    sidebar?.classList.toggle('open');
+                    return;
+                }
+                document.getElementById('app')?.classList.toggle('sidebar-collapsed');
             });
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', () => {
