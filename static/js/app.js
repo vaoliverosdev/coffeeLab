@@ -3292,19 +3292,45 @@ window.editBeverage = async (id) => {
         window.addEventListener('hashchange', route);
         document.addEventListener('DOMContentLoaded', () => {
             checkAuthUI();
-            const sidebar = document.querySelector('.sidebar');
-            document.querySelector('.menu-toggle')?.addEventListener('click', () => {
-                if (window.matchMedia('(max-width: 768px)').matches) {
-                    sidebar?.classList.toggle('open');
+            const appShell = document.getElementById('app');
+            const appMenuToggle = document.getElementById('app-menu-toggle');
+            const isMobileLayout = () => window.matchMedia('(max-width: 768px)').matches;
+
+            function closeAppSidebarOnMobile() {
+                if (!appShell || !isMobileLayout()) return;
+                appShell.classList.remove('mobile-sidebar-open');
+                appMenuToggle?.setAttribute('aria-expanded', 'false');
+            }
+
+            appMenuToggle?.addEventListener('click', () => {
+                if (!appShell) return;
+
+                if (isMobileLayout()) {
+                    const isOpen = appShell.classList.toggle('mobile-sidebar-open');
+                    appShell.classList.remove('app-sidebar-hidden');
+                    appMenuToggle.setAttribute('aria-expanded', String(isOpen));
                     return;
                 }
-                document.getElementById('app')?.classList.toggle('sidebar-collapsed');
+
+                const isHidden = appShell.classList.toggle('app-sidebar-hidden');
+                appShell.classList.remove('mobile-sidebar-open');
+                appMenuToggle.setAttribute('aria-expanded', String(!isHidden));
             });
+
+            window.addEventListener('resize', () => {
+                if (!appShell) return;
+                if (!isMobileLayout()) {
+                    appShell.classList.remove('mobile-sidebar-open');
+                    appMenuToggle?.setAttribute('aria-expanded', String(!appShell.classList.contains('app-sidebar-hidden')));
+                } else {
+                    appShell.classList.remove('app-sidebar-hidden');
+                    appMenuToggle?.setAttribute('aria-expanded', String(appShell.classList.contains('mobile-sidebar-open')));
+                }
+            });
+
             document.querySelectorAll('.nav-link').forEach(link => {
                 link.addEventListener('click', () => {
-                    if (window.matchMedia('(max-width: 768px)').matches) {
-                        sidebar?.classList.remove('open');
-                    }
+                    closeAppSidebarOnMobile();
                 });
             });
             route();
