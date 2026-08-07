@@ -971,6 +971,56 @@
     </div>
 </div>
 
+<!-- MODAL EDITOR DE COMPARTILHAMENTO (FASE 16/17) -->
+<div id="share-editor-modal" class="modal-overlay hidden" style="display: none;">
+    <div class="modal-card share-editor-card">
+        <div class="modal-header">
+            <div>
+                <h2>Compartilhar Story</h2>
+                <p style="margin:4px 0 0; color:var(--text-secondary); font-size:13px;">Personalize o card antes de exportar.</p>
+            </div>
+            <button type="button" class="modal-close" id="share-editor-close">x</button>
+        </div>
+        <div class="modal-body share-editor-body">
+            <div class="share-preview-wrap">
+                <canvas id="share-preview-canvas" width="324" height="405" aria-label="Prévia do compartilhamento"></canvas>
+            </div>
+            <div class="share-controls">
+                <label class="form-group">
+                    <span>Título</span>
+                    <input id="share-title-input" class="input-field" type="text" maxlength="70">
+                </label>
+                <label class="form-group">
+                    <span>Tema</span>
+                    <select id="share-theme-select" class="input-field">
+                        <option value="espresso">Espresso Glow</option>
+                        <option value="citrus">Citrus Pop</option>
+                        <option value="berry">Berry Neon</option>
+                        <option value="ocean">Cold Brew Azul</option>
+                    </select>
+                </label>
+                <label class="form-group">
+                    <span>Fonte</span>
+                    <select id="share-font-select" class="input-field">
+                        <option value="Inter">Inter Bold</option>
+                        <option value="Georgia">Editorial Serif</option>
+                        <option value="Trebuchet MS">Social Rounded</option>
+                        <option value="Courier New">Lab Mono</option>
+                    </select>
+                </label>
+                <label class="form-group">
+                    <span>Foto opcional</span>
+                    <input id="share-photo-input" class="input-field" type="file" accept="image/*">
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="share-editor-cancel">Cancelar</button>
+            <button type="button" class="btn btn-share" id="share-editor-export">Compartilhar / PNG</button>
+        </div>
+    </div>
+</div>
+
     <script>
         document.getElementById('modal-sensory')?.remove();
     </script>

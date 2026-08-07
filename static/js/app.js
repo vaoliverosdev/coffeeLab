@@ -57,6 +57,24 @@
         recipeFilterFav: false
     };
 
+        const SHARE_THEMES = {
+            espresso: ['#3b2418', '#8a4a2d', '#d39a5d'],
+            citrus: ['#2d130d', '#f97316', '#fde68a'],
+            berry: ['#24051f', '#be185d', '#f0abfc'],
+            ocean: ['#061826', '#2563eb', '#67e8f9']
+        };
+
+        const SHARE_KIND_THEME = {
+            coffee: 'espresso',
+            recipe: 'citrus',
+            beverage: 'berry',
+            extraction: 'ocean'
+        };
+
+        let pendingShare = null;
+        let sharePhotoDataUrl = null;
+        let sharePreviewRaf = null;
+
         const html = document.documentElement;
         const authScreen = document.getElementById('auth-screen');
         const appScreen = document.getElementById('app');
@@ -257,7 +275,275 @@
             showToast('Imagem PNG exportada.');
         }
 
-        window.shareCoffeeLabItem = shareCoffeeLabItem;
+        function drawShareRoundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            if (typeof ctx.roundRect === 'function') {
+                ctx.roundRect(x, y, width, height, radius);
+                return;
+            }
+            const r = Math.min(radius, width / 2, height / 2);
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height - r);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            ctx.lineTo(x + r, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+        }
+
+        function loadShareAsset(src) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = reject;
+                image.src = src;
+            });
+        }
+
+        function drawShareCoverImage(ctx, image, x, y, width, height) {
+            const scale = Math.max(width / image.width, height / image.height);
+            const sw = width / scale;
+            const sh = height / scale;
+            const sx = (image.width - sw) / 2;
+            const sy = (image.height - sh) / 2;
+            ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+        }
+
+        async function createShareStoryImage(kind, item, options = {}) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1080;
+            canvas.height = 1350;
+            const ctx = canvas.getContext('2d');
+            const themeKey = options.theme || SHARE_KIND_THEME[kind] || 'espresso';
+            const [a, b, c] = SHARE_THEMES[themeKey] || SHARE_THEMES.espresso;
+            const fontFamily = options.font || 'Inter';
+            const titleText = sanitizeShareText(options.title || item.name || item.recipe?.name || item.recipe_name || 'Meu Coffee Lab');
+            const bg = ctx.createLinearGradient(0, 0, 1080, 1350);
+            bg.addColorStop(0, a);
+            bg.addColorStop(.55, b);
+            bg.addColorStop(1, c);
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, 1080, 1350);
+
+            ctx.fillStyle = 'rgba(255,255,255,.14)';
+            ctx.beginPath(); ctx.arc(150, 140, 270, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(930, 1170, 360, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,.12)';
+            drawShareRoundRect(ctx, 74, 74, 932, 1202, 42);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,.3)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = `700 44px ${fontFamily}, Inter, system-ui, sans-serif`;
+            ctx.fillText('Coffee Lab', 120, 150);
+            ctx.font = `600 24px ${fontFamily}, Inter, system-ui, sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,.72)';
+            ctx.fillText(kind === 'coffee' ? 'Cafe especial' : kind === 'recipe' ? 'Receita de preparo' : kind === 'beverage' ? 'Bebida autoral' : 'Registro de extracao', 120, 190);
+
+            if (options.photoDataUrl) {
+                try {
+                    const photo = await loadShareAsset(options.photoDataUrl);
+                    ctx.save();
+                    drawShareRoundRect(ctx, 646, 252, 270, 270, 34);
+                    ctx.clip();
+                    drawShareCoverImage(ctx, photo, 646, 252, 270, 270);
+                    ctx.restore();
+                    ctx.strokeStyle = 'rgba(255,255,255,.55)';
+                    ctx.lineWidth = 3;
+                    drawShareRoundRect(ctx, 646, 252, 270, 270, 34);
+                    ctx.stroke();
+                } catch (error) {
+                    console.warn('[Share] Foto ignorada no card:', error);
+                }
+            }
+
+            ctx.fillStyle = '#fff';
+            ctx.font = `800 76px ${fontFamily}, Inter, system-ui, sans-serif`;
+            let y = drawWrappedText(ctx, titleText, 120, 360, options.photoDataUrl ? 490 : 840, 84, 3);
+
+            ctx.font = `500 34px ${fontFamily}, Inter, system-ui, sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,.88)';
+            y += 34;
+            drawWrappedText(ctx, buildShareText(kind, item).split('\n').slice(1).join('  -  '), 120, y, 840, 46, 7);
+
+            ctx.fillStyle = 'rgba(255,255,255,.23)';
+            drawShareRoundRect(ctx, 120, 1120, 840, 92, 24);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = `700 30px ${fontFamily}, Inter, system-ui, sans-serif`;
+            ctx.fillText('Feito no Coffee Lab', 154, 1176);
+
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.95));
+        }
+
+        function getShareStoryOptions() {
+            return {
+                title: document.getElementById('share-title-input')?.value?.trim(),
+                theme: document.getElementById('share-theme-select')?.value || 'espresso',
+                font: document.getElementById('share-font-select')?.value || 'Inter',
+                photoDataUrl: sharePhotoDataUrl
+            };
+        }
+
+        async function renderShareStoryPreview() {
+            if (!pendingShare) return;
+            const preview = document.getElementById('share-preview-canvas');
+            if (!preview) return;
+            const blob = await createShareStoryImage(pendingShare.kind, pendingShare.item, getShareStoryOptions());
+            const url = URL.createObjectURL(blob);
+            try {
+                const image = await loadShareAsset(url);
+                const ctx = preview.getContext('2d');
+                ctx.clearRect(0, 0, preview.width, preview.height);
+                ctx.drawImage(image, 0, 0, preview.width, preview.height);
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        function scheduleShareStoryPreview() {
+            if (sharePreviewRaf) cancelAnimationFrame(sharePreviewRaf);
+            sharePreviewRaf = requestAnimationFrame(() => {
+                sharePreviewRaf = null;
+                renderShareStoryPreview().catch(error => {
+                    console.error('[Share] Erro ao renderizar preview:', error);
+                    showToast('Nao foi possivel atualizar a previa.', 'error');
+                });
+            });
+        }
+
+        function closeShareStoryEditor() {
+            const modal = document.getElementById('share-editor-modal');
+            modal?.classList.add('hidden');
+            if (modal) modal.style.display = 'none';
+            pendingShare = null;
+            sharePhotoDataUrl = null;
+        }
+
+        async function exportShareStory() {
+            if (!pendingShare) return;
+            const { kind, item } = pendingShare;
+            const title = `Coffee Lab - ${item.name || item.recipe?.name || 'Compartilhamento'}`;
+            const text = buildShareText(kind, item);
+            const blob = await createShareStoryImage(kind, item, getShareStoryOptions());
+            const file = new File([blob], `${kind}-${item.id || 'coffee-lab'}-story.png`, { type: 'image/png' });
+
+            try {
+                if (navigator.canShare?.({ files: [file] })) {
+                    await navigator.share({ title, text, files: [file] });
+                    closeShareStoryEditor();
+                    return;
+                }
+                if (navigator.share) {
+                    await navigator.share({ title, text });
+                    closeShareStoryEditor();
+                    return;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${kind}-${item.id || 'coffee-lab'}-story.png`;
+            link.click();
+            URL.revokeObjectURL(url);
+            closeShareStoryEditor();
+            showToast('Imagem PNG exportada.');
+        }
+
+        function initShareStoryEditor() {
+            const modal = document.getElementById('share-editor-modal');
+            if (!modal) return;
+            const closeButton = document.getElementById('share-editor-close');
+            const cancelButton = document.getElementById('share-editor-cancel');
+            const exportButton = document.getElementById('share-editor-export');
+            const titleInput = document.getElementById('share-title-input');
+            const themeSelect = document.getElementById('share-theme-select');
+            const fontSelect = document.getElementById('share-font-select');
+            const photoInput = document.getElementById('share-photo-input');
+
+            closeButton?.addEventListener('click', closeShareStoryEditor);
+            cancelButton?.addEventListener('click', closeShareStoryEditor);
+            modal.addEventListener('click', event => {
+                if (event.target === modal) closeShareStoryEditor();
+            });
+            exportButton?.addEventListener('click', () => {
+                exportShareStory().catch(error => {
+                    console.error('[Share] Erro ao exportar:', error);
+                    showToast('Nao foi possivel exportar o card.', 'error');
+                });
+            });
+            [titleInput, themeSelect, fontSelect].forEach(control => {
+                control?.addEventListener('input', scheduleShareStoryPreview);
+                control?.addEventListener('change', scheduleShareStoryPreview);
+            });
+            photoInput?.addEventListener('change', event => {
+                const file = event.target.files?.[0];
+                if (!file) {
+                    sharePhotoDataUrl = null;
+                    scheduleShareStoryPreview();
+                    return;
+                }
+                if (!file.type.startsWith('image/')) {
+                    showToast('Escolha um arquivo de imagem.', 'error');
+                    photoInput.value = '';
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast('Use uma imagem de ate 5 MB para compartilhar.', 'error');
+                    photoInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => {
+                    sharePhotoDataUrl = String(reader.result || '');
+                    scheduleShareStoryPreview();
+                };
+                reader.onerror = () => showToast('Nao foi possivel carregar a imagem.', 'error');
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function shareCoffeeLabStoryItem(kind, id) {
+            const collections = {
+                coffee: state.coffees,
+                recipe: state.recipes,
+                extraction: state.extractions
+            };
+            let item = collections[kind]?.find(entry => entry.id === id);
+            if (kind === 'beverage') {
+                const beverages = await apiFetch('/api/beverages');
+                item = Array.isArray(beverages) ? beverages.find(entry => entry.id === id) : null;
+            }
+            if (!item) {
+                showToast('Item nao encontrado para compartilhar.', 'error');
+                return;
+            }
+
+            pendingShare = { kind, item };
+            sharePhotoDataUrl = null;
+            const modal = document.getElementById('share-editor-modal');
+            const titleInput = document.getElementById('share-title-input');
+            const themeSelect = document.getElementById('share-theme-select');
+            const fontSelect = document.getElementById('share-font-select');
+            const photoInput = document.getElementById('share-photo-input');
+            if (titleInput) titleInput.value = item.name || item.recipe?.name || item.recipe_name || 'Meu Coffee Lab';
+            if (themeSelect) themeSelect.value = SHARE_KIND_THEME[kind] || 'espresso';
+            if (fontSelect) fontSelect.value = 'Inter';
+            if (photoInput) photoInput.value = '';
+            modal?.classList.remove('hidden');
+            if (modal) modal.style.display = 'flex';
+            scheduleShareStoryPreview();
+        }
+
+        window.shareCoffeeLabItem = shareCoffeeLabStoryItem;
 
         const NOTIFICATION_SETTINGS_KEY = "coffee_lab_notification_settings";
         const NOTIFICATION_DISMISSED_KEY = "coffee_lab_notifications_dismissed";
@@ -1114,7 +1400,7 @@ async function apiFetch(
     ${c.is_favorite})">${c.is_favorite ? 'â­' : 'â˜†'}</button>
                 <div class="coffee-card-img-wrapper"
     onclick="window.coffeeActions.triggerPhotoUpload(${c.id})">
-                ${c.photo_url ? `<img src="${c.photo_url}">` : '<span class="placeholder-icon">☕</span>'}
+                ${c.photo_url ? `<img src="${c.photo_url}" alt="${c.name}" loading="lazy" decoding="async">` : '<span class="placeholder-icon">☕</span>'}
                 ${c.sca_score ? `<span class="coffee-card-sca">SCA ${c.sca_score}</span>` : ''}
                 </div>
                 <div class="coffee-card-content">
@@ -3726,6 +4012,7 @@ window.editBeverage = async (id) => {
         document.addEventListener('DOMContentLoaded', () => {
             checkAuthUI();
             initNotificationSystem();
+            initShareStoryEditor();
             const appShell = document.getElementById('app');
             const appMenuToggle = document.getElementById('app-menu-toggle');
             const isMobileLayout = () => window.matchMedia('(max-width: 768px)').matches;

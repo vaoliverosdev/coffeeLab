@@ -284,6 +284,41 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
   font-family: Inter, system-ui, sans-serif;
 }
 
+.share-editor-card {
+  max-width: 880px;
+}
+
+.modal-body.share-editor-body {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.share-preview-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, var(--accent-3) 30%);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--accent-2) 18%, transparent), transparent 30%),
+    var(--surface);
+}
+
+.share-preview-wrap canvas {
+  width: min(100%, 324px);
+  height: auto;
+  aspect-ratio: 4 / 5;
+  border-radius: 18px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.24);
+}
+
+.share-controls {
+  display: grid;
+  gap: 14px;
+}
+
 .coffee-calendar-card { overflow: hidden; }
 .calendar-card-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .calendar-summary-pill { padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); font-size: 12px; white-space: nowrap; }
@@ -1035,5 +1070,43 @@ select.input option {
   .toast {
     min-width: 0;
     width: 100%;
+  }
+
+  .share-editor-card {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .modal-body.share-editor-body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .share-preview-wrap {
+    padding: 10px;
+  }
+
+  .share-preview-wrap canvas {
+    width: min(100%, 260px);
+  }
+
+  .coffee-activity-calendar {
+    gap: 5px;
+  }
+
+  .coffee-day-cell {
+    min-height: 34px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
