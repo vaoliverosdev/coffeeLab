@@ -1,4 +1,4 @@
-const CACHE_NAME = "coffee-lab-v14.2";
+const CACHE_NAME = "coffee-lab-v15.0";
 
 const APP_SHELL = [
     "/",
@@ -50,6 +50,25 @@ self.addEventListener("fetch", (event) => {
     }
 
     event.respondWith(staleWhileRevalidate(request));
+});
+
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    const actionUrl = event.notification.data?.action_url || "#/dashboard";
+    const targetUrl = new URL("/", self.location.origin);
+    targetUrl.hash = actionUrl.startsWith("#") ? actionUrl.slice(1) : actionUrl;
+
+    event.waitUntil(
+        clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+            for (const client of clientList) {
+                if ("focus" in client) {
+                    client.navigate(targetUrl.href);
+                    return client.focus();
+                }
+            }
+            return clients.openWindow(targetUrl.href);
+        })
+    );
 });
 
 async function networkFirst(request, fallbackPath) {

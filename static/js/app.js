@@ -112,6 +112,248 @@
             modal.style.display = 'none';
         }
 
+        const NOTIFICATION_SETTINGS_KEY = "coffee_lab_notification_settings";
+        const NOTIFICATION_DISMISSED_KEY = "coffee_lab_notifications_dismissed";
+        const NOTIFICATION_SENT_KEY = "coffee_lab_notifications_sent";
+        let latestNotifications = [];
+
+        function getNotificationSettings() {
+            const defaults = {
+                coffeeTimeEnabled: true,
+                coffeeTime: "09:00",
+                stockEnabled: true,
+                achievementsEnabled: true,
+                recipesEnabled: true
+            };
+            try {
+                return { ...defaults, ...JSON.parse(localStorage.getItem(NOTIFICATION_SETTINGS_KEY) || "{}") };
+            } catch {
+                return defaults;
+            }
+        }
+
+        function saveNotificationSettings(settings) {
+            localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
+        }
+
+        function getStoredIdList(key) {
+            try {
+                return JSON.parse(localStorage.getItem(key) || "[]");
+            } catch {
+                return [];
+            }
+        }
+
+        function saveStoredIdList(key, values) {
+            localStorage.setItem(key, JSON.stringify([...new Set(values)].slice(-250)));
+        }
+
+        function isNotificationAllowedBySettings(item, settings) {
+            if (item.type === "coffee_time") return settings.coffeeTimeEnabled;
+            if (item.type === "stock_low" || item.type === "stock_critical") return settings.stockEnabled;
+            if (item.type === "achievement") return settings.achievementsEnabled;
+            if (item.type === "new_recipe") return settings.recipesEnabled;
+            return true;
+        }
+
+        function buildCoffeeTimeNotification(settings) {
+            if (!settings.coffeeTimeEnabled) return null;
+            const now = new Date();
+            const todayKey = now.toISOString().slice(0, 10);
+            const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+            if (currentTime !== settings.coffeeTime) return null;
+            return {
+                id: `coffee-time-${todayKey}-${settings.coffeeTime}`,
+                type: "coffee_time",
+                title: "Hora do café",
+                message: "Seu ritual diário está chamando. Escolha uma receita e prepare com calma.",
+                severity: "info",
+                created_at: now.toISOString(),
+                action_url: "#/recipes"
+            };
+        }
+
+        function updateNotificationSettingsUI() {
+            const settings = getNotificationSettings();
+            const permission = "Notification" in window ? Notification.permission : "unsupported";
+            const permissionLabel = document.getElementById("notification-permission-label");
+            const enableBtn = document.getElementById("enable-notifications-btn");
+            const coffeeTimeEnabled = document.getElementById("notify-coffee-time-enabled");
+            const coffeeTime = document.getElementById("notify-coffee-time");
+            const stockEnabled = document.getElementById("notify-stock-enabled");
+            const achievementsEnabled = document.getElementById("notify-achievements-enabled");
+            const recipesEnabled = document.getElementById("notify-recipes-enabled");
+
+            if (permissionLabel) {
+                permissionLabel.innerText = permission === "granted"
+                    ? "Notificações do navegador ativas"
+                    : permission === "denied"
+                        ? "Permissão bloqueada no navegador"
+                        : "Clique para ativar alertas do navegador";
+            }
+            if (enableBtn) {
+                enableBtn.innerText = permission === "granted" ? "Notificações ativas" : "Ativar notificações";
+                enableBtn.disabled = permission === "granted" || permission === "unsupported";
+            }
+            if (coffeeTimeEnabled) coffeeTimeEnabled.checked = settings.coffeeTimeEnabled;
+            if (coffeeTime) coffeeTime.value = settings.coffeeTime;
+            if (stockEnabled) stockEnabled.checked = settings.stockEnabled;
+            if (achievementsEnabled) achievementsEnabled.checked = settings.achievementsEnabled;
+            if (recipesEnabled) recipesEnabled.checked = settings.recipesEnabled;
+        }
+
+        function renderNotifications() {
+            const settings = getNotificationSettings();
+            const dismissed = new Set(getStoredIdList(NOTIFICATION_DISMISSED_KEY));
+            const visible = latestNotifications
+                .filter(item => isNotificationAllowedBySettings(item, settings))
+                .filter(item => !dismissed.has(item.id));
+            const badge = document.getElementById("notification-badge");
+            const list = document.getElementById("notifications-list");
+
+            if (badge) {
+                badge.innerText = String(Math.min(visible.length, 99));
+                badge.classList.toggle("hidden", visible.length === 0);
+            }
+            if (!list) return;
+            if (visible.length === 0) {
+                list.innerHTML = '<div class="notification-empty">Nenhuma notificação por enquanto.</div>';
+                return;
+            }
+            list.innerHTML = visible.map(item => `
+                <a class="notification-item ${item.severity || 'info'}" href="${item.action_url || '#/dashboard'}" data-notification-id="${item.id}">
+                    <strong>${item.title}</strong>
+                    <p>${item.message}</p>
+                </a>
+            `).join("");
+        }
+
+        async function showNativeNotification(item) {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+            const sent = getStoredIdList(NOTIFICATION_SENT_KEY);
+            if (sent.includes(item.id)) return;
+
+            const options = {
+                body: item.message,
+                icon: "/static/icons/icon-192.png",
+                badge: "/static/icons/icon-192.png",
+                data: { action_url: item.action_url || "#/dashboard" }
+            };
+            try {
+                if ("serviceWorker" in navigator) {
+                    const registration = await navigator.serviceWorker.ready;
+                    await registration.showNotification(item.title, options);
+                } else {
+                    new Notification(item.title, options);
+                }
+                sent.push(item.id);
+                saveStoredIdList(NOTIFICATION_SENT_KEY, sent);
+            } catch (error) {
+                console.warn("[Notifications] Falha ao exibir notificação nativa:", error);
+            }
+        }
+
+        async function refreshNotifications({ notify = false } = {}) {
+            if (!state.token) return;
+            const settings = getNotificationSettings();
+            const items = [];
+
+            try {
+                const remoteItems = await apiFetch("/api/notifications");
+                if (Array.isArray(remoteItems)) items.push(...remoteItems);
+            } catch (error) {
+                console.warn("[Notifications] Não foi possível carregar alertas remotos:", error.message);
+            }
+
+            const coffeeTimeItem = buildCoffeeTimeNotification(settings);
+            if (coffeeTimeItem) items.unshift(coffeeTimeItem);
+
+            latestNotifications = items;
+            renderNotifications();
+
+            if (notify) {
+                const dismissed = new Set(getStoredIdList(NOTIFICATION_DISMISSED_KEY));
+                for (const item of items) {
+                    if (!dismissed.has(item.id) && isNotificationAllowedBySettings(item, settings)) {
+                        await showNativeNotification(item);
+                    }
+                }
+            }
+        }
+
+        async function requestNotificationPermission() {
+            if (!("Notification" in window)) {
+                showToast("Este navegador não oferece suporte a notificações.", "error");
+                return;
+            }
+            const permission = await Notification.requestPermission();
+            updateNotificationSettingsUI();
+            showToast(
+                permission === "granted"
+                    ? "Notificações ativadas."
+                    : "Permissão de notificações não concedida.",
+                permission === "granted" ? "success" : "error"
+            );
+            if (permission === "granted") refreshNotifications({ notify: true });
+        }
+
+        function initNotificationSystem() {
+            updateNotificationSettingsUI();
+            const panel = document.getElementById("notifications-panel");
+            const toggle = document.getElementById("notifications-toggle");
+            const markRead = document.getElementById("notifications-mark-read");
+            const enableBtn = document.getElementById("enable-notifications-btn");
+
+            toggle?.addEventListener("click", (event) => {
+                event.stopPropagation();
+                panel?.classList.toggle("hidden");
+                toggle.setAttribute("aria-expanded", String(!panel?.classList.contains("hidden")));
+                refreshNotifications();
+            });
+            document.addEventListener("click", (event) => {
+                if (!panel || panel.classList.contains("hidden")) return;
+                if (!event.target.closest(".notification-wrapper")) {
+                    panel.classList.add("hidden");
+                    toggle?.setAttribute("aria-expanded", "false");
+                }
+            });
+            document.getElementById("notifications-list")?.addEventListener("click", (event) => {
+                const item = event.target.closest("[data-notification-id]");
+                if (!item) return;
+                const dismissed = getStoredIdList(NOTIFICATION_DISMISSED_KEY);
+                dismissed.push(item.dataset.notificationId);
+                saveStoredIdList(NOTIFICATION_DISMISSED_KEY, dismissed);
+                panel?.classList.add("hidden");
+                renderNotifications();
+            });
+            markRead?.addEventListener("click", () => {
+                const dismissed = getStoredIdList(NOTIFICATION_DISMISSED_KEY);
+                latestNotifications.forEach(item => dismissed.push(item.id));
+                saveStoredIdList(NOTIFICATION_DISMISSED_KEY, dismissed);
+                renderNotifications();
+            });
+            enableBtn?.addEventListener("click", requestNotificationPermission);
+
+            const bindSetting = (id, key) => {
+                const el = document.getElementById(id);
+                el?.addEventListener("change", () => {
+                    const settings = getNotificationSettings();
+                    settings[key] = el.type === "checkbox" ? el.checked : el.value;
+                    saveNotificationSettings(settings);
+                    updateNotificationSettingsUI();
+                    refreshNotifications();
+                });
+            };
+            bindSetting("notify-coffee-time-enabled", "coffeeTimeEnabled");
+            bindSetting("notify-coffee-time", "coffeeTime");
+            bindSetting("notify-stock-enabled", "stockEnabled");
+            bindSetting("notify-achievements-enabled", "achievementsEnabled");
+            bindSetting("notify-recipes-enabled", "recipesEnabled");
+
+            refreshNotifications({ notify: true });
+            setInterval(() => refreshNotifications({ notify: true }), 60000);
+        }
+
     // ==========================================
     // FASE 14 — OFFLINE DATA CACHE
     // IndexedDB
@@ -2945,6 +3187,7 @@ window.editBeverage = async (id) => {
     if (typeof route === 'function') {
         route();
     }
+    refreshNotifications({ notify: true });
     });
 
     window.addEventListener('focus', () => {
@@ -3292,6 +3535,7 @@ window.editBeverage = async (id) => {
         window.addEventListener('hashchange', route);
         document.addEventListener('DOMContentLoaded', () => {
             checkAuthUI();
+            initNotificationSystem();
             const appShell = document.getElementById('app');
             const appMenuToggle = document.getElementById('app-menu-toggle');
             const isMobileLayout = () => window.matchMedia('(max-width: 768px)').matches;

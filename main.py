@@ -3,7 +3,7 @@ import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Query, Header
 from fastapi.responses import FileResponse, JSONResponse
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from core import (
     Base, engine, get_db, hash_password, verify_password, 
     create_access_token, User, UserCreate, UserLogin, 
-    UserResponse, Token, ProfileUpdate, PasswordRecoveryRequest, ALGORITHM, get_settings,
+    UserResponse, Token, ProfileUpdate, PasswordRecoveryRequest, NotificationItem, ALGORITHM, get_settings,
     Coffee, CoffeeCreate, CoffeeUpdate, CoffeeResponse,
     Stock, StockUpdate, StockResponse, StockMovement,
     Recipe, RecipeCreate, RecipeUpdate, RecipeResponse, MotorCalculationRequest, MotorCalculationResponse,
@@ -857,6 +857,98 @@ async def get_extractions(
     ).order_by(desc(Extraction.extraction_date)).all()
     
     return extractions
+
+@app.get("/api/notifications", response_model=List[NotificationItem])
+async def get_notifications(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db)
+):
+    u = await get_current_user(db, token=authorization)
+    now = datetime.utcnow()
+    notifications: list[NotificationItem] = []
+
+    stock_items = (
+        db.query(Stock)
+        .join(Coffee)
+        .filter(Coffee.user_id == u.id)
+        .order_by(Stock.current_quantity.asc())
+        .all()
+    )
+    for item in stock_items:
+        min_qty = max(float(item.min_quantity or 0), 0)
+        current_qty = float(item.current_quantity or 0)
+        coffee_name = item.coffee.name if item.coffee else "Café"
+        if min_qty <= 0:
+            continue
+        critical_limit = max(15.0, min_qty * 0.35)
+        if current_qty <= critical_limit:
+            notifications.append(NotificationItem(
+                id=f"stock-critical-{item.id}-{int(current_qty)}",
+                type="stock_critical",
+                title="Estoque crítico",
+                message=f"{coffee_name} está com {current_qty:g}g. Reabasteça antes do próximo preparo.",
+                severity="critical",
+                created_at=item.updated_at or now,
+                action_url="#/stock"
+            ))
+        elif current_qty <= min_qty:
+            notifications.append(NotificationItem(
+                id=f"stock-low-{item.id}-{int(current_qty)}",
+                type="stock_low",
+                title="Estoque baixo",
+                message=f"{coffee_name} está abaixo do limite configurado ({current_qty:g}g de {min_qty:g}g).",
+                severity="warning",
+                created_at=item.updated_at or now,
+                action_url="#/stock"
+            ))
+
+    counts = {
+        "coffees": db.query(Coffee).filter(Coffee.user_id == u.id).count(),
+        "recipes": db.query(Recipe).filter(Recipe.user_id == u.id).count(),
+        "extractions": db.query(Extraction).filter(Extraction.user_id == u.id).count(),
+        "sensory": db.query(SensoryLog).filter(SensoryLog.user_id == u.id).count(),
+        "beverages": db.query(Beverage).filter(Beverage.user_id == u.id).count(),
+    }
+    achievement_rules = [
+        ("first-coffee", counts["coffees"] >= 1, "Primeiro café cadastrado", "Sua biblioteca de cafés especiais começou.", "#/coffees"),
+        ("five-recipes", counts["recipes"] >= 5, "Livro de receitas crescendo", "Você já tem 5 receitas cadastradas no Coffee Lab.", "#/recipes"),
+        ("ten-extractions", counts["extractions"] >= 10, "Ritual consistente", "Você registrou 10 extrações. As estatísticas já estão ganhando corpo.", "#/stats"),
+        ("five-sensory", counts["sensory"] >= 5, "Paladar em treino", "Você já registrou 5 degustações no diário sensorial.", "#/sensory"),
+        ("first-beverage", counts["beverages"] >= 1, "Primeira bebida autoral", "Seu caderno de bebidas já tem a primeira criação.", "#/beverages"),
+    ]
+    for key, unlocked, title, message, action_url in achievement_rules:
+        if unlocked:
+            notifications.append(NotificationItem(
+                id=f"achievement-{key}",
+                type="achievement",
+                title=title,
+                message=message,
+                severity="success",
+                created_at=now,
+                action_url=action_url
+            ))
+
+    recent_recipes = (
+        db.query(Recipe)
+        .filter(Recipe.user_id == u.id, Recipe.created_at >= now - timedelta(days=7))
+        .order_by(desc(Recipe.created_at))
+        .limit(3)
+        .all()
+    )
+    for recipe in recent_recipes:
+        notifications.append(NotificationItem(
+            id=f"new-recipe-{recipe.id}",
+            type="new_recipe",
+            title="Nova receita disponível",
+            message=f"{recipe.name} foi adicionada ao seu livro de receitas.",
+            severity="info",
+            created_at=recipe.created_at,
+            action_url="#/recipes"
+        ))
+
+    severity_order = {"critical": 0, "warning": 1, "success": 2, "info": 3}
+    notifications.sort(key=lambda item: (severity_order.get(item.severity, 9), -item.created_at.timestamp()))
+    return notifications
 
 # --- SERVINDO FRONTEND (DEVE FICAR SEMPRE POR ÚLTIMO) ---
 static_path = Path(__file__).parent / "static"

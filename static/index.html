@@ -94,6 +94,24 @@
             </div>
             <div class="topbar-actions">
                 <button id="install-pwa-btn" class="install-pwa-btn hidden" type="button">Instalar Coffee Lab </button>
+                <div class="notification-wrapper">
+                    <button id="notifications-toggle" class="icon-btn notification-btn" type="button" aria-label="Notificações" aria-expanded="false">
+                        <span>🔔</span>
+                        <span id="notification-badge" class="notification-badge hidden">0</span>
+                    </button>
+                    <div id="notifications-panel" class="notifications-panel hidden">
+                        <div class="notifications-header">
+                            <div>
+                                <strong>Notificações</strong>
+                                <span id="notification-permission-label">Alertas do Coffee Lab</span>
+                            </div>
+                            <button id="notifications-mark-read" type="button">Limpar</button>
+                        </div>
+                        <div id="notifications-list" class="notifications-list">
+                            <div class="notification-empty">Nenhuma notificação por enquanto.</div>
+                        </div>
+                    </div>
+                </div>
                 <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; padding: 8px;">🌓</button>
                 <a href="#/profile" class="user-profile-btn" id="topbar-avatar-btn">
                     <img id="user-avatar-mini" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar">
@@ -160,6 +178,53 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Salvar Perfil</button>
                     </form>
+                </div>
+
+                <div class="card notification-settings-card" style="margin-top: 20px;">
+                    <div class="view-header" style="margin-bottom: 16px;">
+                        <div>
+                            <h2 style="font-size:18px; margin:0;">Notificações</h2>
+                            <p style="margin:4px 0 0;">Configure lembretes e alertas inteligentes do Coffee Lab.</p>
+                        </div>
+                        <button id="enable-notifications-btn" type="button" class="btn btn-secondary btn-auto">Ativar notificações</button>
+                    </div>
+                    <div class="notification-settings-grid">
+                        <label class="notification-setting-row">
+                            <span>
+                                <strong>Hora do café</strong>
+                                <small>Lembrete diário para preparar seu café.</small>
+                            </span>
+                            <input type="checkbox" id="notify-coffee-time-enabled">
+                        </label>
+                        <div class="notification-setting-row">
+                            <span>
+                                <strong>Horário</strong>
+                                <small>Define quando o lembrete diário aparece.</small>
+                            </span>
+                            <input type="time" id="notify-coffee-time" value="09:00">
+                        </div>
+                        <label class="notification-setting-row">
+                            <span>
+                                <strong>Estoque baixo e crítico</strong>
+                                <small>Avise quando grãos passarem do limite configurado.</small>
+                            </span>
+                            <input type="checkbox" id="notify-stock-enabled">
+                        </label>
+                        <label class="notification-setting-row">
+                            <span>
+                                <strong>Conquistas</strong>
+                                <small>Receba marcos de uso do laboratório.</small>
+                            </span>
+                            <input type="checkbox" id="notify-achievements-enabled">
+                        </label>
+                        <label class="notification-setting-row">
+                            <span>
+                                <strong>Novas receitas</strong>
+                                <small>Destaque receitas adicionadas recentemente.</small>
+                            </span>
+                            <input type="checkbox" id="notify-recipes-enabled">
+                        </label>
+                    </div>
                 </div>
             </section>
 

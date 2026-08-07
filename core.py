@@ -140,6 +140,15 @@ class Token(BaseModel): access_token: str; token_type: str; user: UserResponse
 class ProfileUpdate(BaseModel): name: Optional[str] = None; bio: Optional[str] = None
 class PasswordRecoveryRequest(BaseModel): email: EmailStr
 
+class NotificationItem(BaseModel):
+    id: str
+    type: str
+    title: str
+    message: str
+    severity: str = "info"
+    created_at: datetime
+    action_url: Optional[str] = None
+
 class CoffeeCreate(BaseModel): name: str; roastery: str; origin: str; region: Optional[str] = None; variety: Optional[str] = None; process: Optional[str] = None; altitude: Optional[str] = None; roast_level: Optional[str] = None; roast_date: Optional[date] = None; sensory_notes: Optional[str] = None; sca_score: Optional[float] = None
 class CoffeeUpdate(BaseModel): name: Optional[str] = None; roastery: Optional[str] = None; origin: Optional[str] = None; region: Optional[str] = None; variety: Optional[str] = None; process: Optional[str] = None; altitude: Optional[str] = None; roast_level: Optional[str] = None; roast_date: Optional[date] = None; sensory_notes: Optional[str] = None; sca_score: Optional[float] = None; is_favorite: Optional[bool] = None
 class CoffeeResponse(BaseModel):
