@@ -112,6 +112,153 @@
             modal.style.display = 'none';
         }
 
+        function sanitizeShareText(value) {
+            return String(value ?? '').replace(/\s+/g, ' ').trim();
+        }
+
+        function buildShareText(kind, item) {
+            if (kind === 'coffee') {
+                return `Coffee Lab | ${item.name}\nTorrefação: ${item.roastery || '-'}\nOrigem: ${item.origin || '-'}\nNotas: ${item.sensory_notes || 'Sem notas cadastradas.'}`;
+            }
+            if (kind === 'recipe') {
+                const ratio = item.coffee_weight ? (item.water_weight / item.coffee_weight).toFixed(1) : '-';
+                return `Coffee Lab | Receita: ${item.name}\nMétodo: ${item.method}\nProporção: 1:${ratio}\nCafé: ${item.coffee_weight}g | Água: ${item.water_weight}g`;
+            }
+            if (kind === 'beverage') {
+                return `Coffee Lab | Bebida: ${item.name}\n${item.is_cold ? 'Gelada' : 'Quente'}\nIngredientes: ${item.ingredients || '-'}\n${item.description || ''}`;
+            }
+            if (kind === 'extraction') {
+                const mins = String(Math.floor((item.total_time || 0) / 60)).padStart(2, '0');
+                const secs = String((item.total_time || 0) % 60).padStart(2, '0');
+                const recipeName = item.recipe?.name || item.recipe_name || 'Preparo Manual';
+                const coffeeName = item.coffee?.name || item.coffee_name || 'Café livre';
+                return `Coffee Lab | Extração\n${recipeName}\nGrão: ${coffeeName}\nTempo: ${mins}:${secs}\n${item.notes || ''}`;
+            }
+            return `Coffee Lab | ${item.name || item.title || 'Compartilhamento'}`;
+        }
+
+        function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 8) {
+            const words = sanitizeShareText(text).split(' ');
+            let line = '';
+            let lines = 0;
+            for (const word of words) {
+                const test = line ? `${line} ${word}` : word;
+                if (ctx.measureText(test).width > maxWidth && line) {
+                    ctx.fillText(line, x, y);
+                    y += lineHeight;
+                    line = word;
+                    lines++;
+                    if (lines >= maxLines - 1) break;
+                } else {
+                    line = test;
+                }
+            }
+            if (line && lines < maxLines) ctx.fillText(line, x, y);
+            return y + lineHeight;
+        }
+
+        async function createShareImage(kind, item) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1080;
+            canvas.height = 1350;
+            const ctx = canvas.getContext('2d');
+            const gradients = {
+                coffee: ['#3b2418', '#8a4a2d', '#d39a5d'],
+                recipe: ['#12231f', '#3d7d5a', '#d1a85b'],
+                beverage: ['#16192e', '#3b82f6', '#f97345'],
+                extraction: ['#211827', '#7c3aed', '#f59e0b']
+            };
+            const [a, b, c] = gradients[kind] || gradients.coffee;
+            const bg = ctx.createLinearGradient(0, 0, 1080, 1350);
+            bg.addColorStop(0, a);
+            bg.addColorStop(.58, b);
+            bg.addColorStop(1, c);
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, 1080, 1350);
+
+            ctx.fillStyle = 'rgba(255,255,255,.13)';
+            ctx.beginPath(); ctx.arc(160, 140, 260, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(920, 1180, 340, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = 'rgba(255,255,255,.12)';
+            ctx.roundRect(74, 74, 932, 1202, 42);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255,255,255,.28)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#fff';
+            ctx.font = '700 44px Inter, system-ui, sans-serif';
+            ctx.fillText('Coffee Lab', 120, 150);
+            ctx.font = '600 24px Inter, system-ui, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,.72)';
+            ctx.fillText(kind === 'coffee' ? 'Café especial' : kind === 'recipe' ? 'Receita de preparo' : kind === 'beverage' ? 'Bebida autoral' : 'Registro de extração', 120, 190);
+
+            const title = item.name || item.recipe?.name || item.recipe_name || 'Meu café';
+            ctx.fillStyle = '#fff';
+            ctx.font = '800 76px Inter, system-ui, sans-serif';
+            let y = drawWrappedText(ctx, title, 120, 360, 840, 84, 3);
+
+            ctx.font = '500 34px Inter, system-ui, sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,.86)';
+            y += 34;
+            drawWrappedText(ctx, buildShareText(kind, item).split('\n').slice(1).join('  •  '), 120, y, 840, 46, 7);
+
+            ctx.fillStyle = 'rgba(255,255,255,.22)';
+            ctx.roundRect(120, 1120, 840, 92, 24);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '700 30px Inter, system-ui, sans-serif';
+            ctx.fillText('Feito no Coffee Lab', 154, 1176);
+
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.95));
+        }
+
+        async function shareCoffeeLabItem(kind, id) {
+            const collections = {
+                coffee: state.coffees,
+                recipe: state.recipes,
+                extraction: state.extractions
+            };
+            let item = collections[kind]?.find(entry => entry.id === id);
+            if (kind === 'beverage') {
+                const beverages = await apiFetch('/api/beverages');
+                item = Array.isArray(beverages) ? beverages.find(entry => entry.id === id) : null;
+            }
+            if (!item) {
+                showToast('Item não encontrado para compartilhar.', 'error');
+                return;
+            }
+
+            const title = `Coffee Lab - ${item.name || item.recipe?.name || 'Compartilhamento'}`;
+            const text = buildShareText(kind, item);
+            const blob = await createShareImage(kind, item);
+            const file = new File([blob], `${kind}-${id}-coffee-lab.png`, { type: 'image/png' });
+
+            try {
+                if (navigator.canShare?.({ files: [file] })) {
+                    await navigator.share({ title, text, files: [file] });
+                    return;
+                }
+                if (navigator.share) {
+                    await navigator.share({ title, text });
+                    return;
+                }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${kind}-${id}-coffee-lab.png`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast('Imagem PNG exportada.');
+        }
+
+        window.shareCoffeeLabItem = shareCoffeeLabItem;
+
         const NOTIFICATION_SETTINGS_KEY = "coffee_lab_notification_settings";
         const NOTIFICATION_DISMISSED_KEY = "coffee_lab_notifications_dismissed";
         const NOTIFICATION_SENT_KEY = "coffee_lab_notifications_sent";
@@ -983,6 +1130,8 @@ async function apiFetch(
                 </div>
                 <div class="coffee-notes-tags">${c.sensory_notes ? c.sensory_notes : 'Sem notas sensoriais cadastradas.'}</div>
                 <div class="coffee-card-actions">
+                    <button class="btn btn-sm btn-share"
+    onclick="window.shareCoffeeLabItem('coffee', ${c.id})">Compartilhar</button>
                     <button class="btn btn-sm btn-secondary"
     onclick="window.coffeeActions.openEditModal(${c.id})">Editar</button>
                     <button class="btn-danger-text"
@@ -1428,6 +1577,8 @@ async function apiFetch(
     onclick="window.recipeActions.openEdit(${r.id})">Editar</button>
                     <button class="btn btn-sm btn-secondary" style="color:var(--accent);"
     onclick="window.recipeActions.duplicate(${r.id})">Duplicar</button>
+                    <button class="btn btn-sm btn-share"
+    onclick="window.shareCoffeeLabItem('recipe', ${r.id})">Compartilhar</button>
                     <button class="btn-danger-text"
     onclick="window.recipeActions.deleteRecipe(${r.id})">Excluir</button>
                     </div>
@@ -1821,6 +1972,9 @@ async function apiFetch(
     color: var(--text-secondary);">
     ðŸ“
     ${ext.notes}</div>` : ''}
+                <div class="coffee-card-actions" style="margin-top:8px;">
+                    <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('extraction', ${ext.id})">Compartilhar PNG</button>
+                </div>
                 </div>
             `;
             }).join('');
@@ -2301,6 +2455,7 @@ async function fetchAndRenderBeverages() {
                 <div style="display: flex; justify-content: space-between; align-items: start;">
                     <h3 style="margin-bottom: 4px;">${b.is_cold ? '🧊' : '☕'} ${b.name}</h3>
                     <div style="display:flex; gap: 6px;">
+                        <button onclick="shareCoffeeLabItem('beverage', ${b.id})" class="btn btn-sm btn-share" style="width:auto;">Compartilhar</button>
                         <button onclick="editBeverage(${b.id})" class="btn btn-sm btn-secondary" style="width:auto;">Editar</button>
                         <button onclick="deleteBeverage(${b.id})" style="background: none; border: none; cursor: pointer; color: #ef4444; font-weight: bold;">x</button>
                     </div>
@@ -2861,12 +3016,47 @@ window.editBeverage = async (id) => {
                 `;
             }
 
+            renderCoffeeActivityCalendar(extractions);
             renderCharts(monthlyData, methodCounts);
 
         } catch (err) {
             console.error(err);
             showToast('Erro ao processar estatísticas.', 'error');
         }
+        }
+
+        function renderCoffeeActivityCalendar(extractions) {
+            const container = document.getElementById('coffee-activity-calendar');
+            const summary = document.getElementById('coffee-calendar-summary');
+            if (!container) return;
+
+            const countsByDay = {};
+            extractions.forEach(ext => {
+                const date = new Date(ext.extraction_date || ext.created_at || Date.now());
+                const key = date.toISOString().slice(0, 10);
+                countsByDay[key] = (countsByDay[key] || 0) + 1;
+            });
+
+            const today = new Date();
+            const days = [];
+            for (let i = 41; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                const key = d.toISOString().slice(0, 10);
+                const count = countsByDay[key] || 0;
+                const level = count === 0 ? 0 : count === 1 ? 1 : count === 2 ? 2 : count === 3 ? 3 : 4;
+                days.push({ key, date: d, count, level });
+            }
+
+            const activeDays = days.filter(day => day.count > 0).length;
+            const totalCups = days.reduce((sum, day) => sum + day.count, 0);
+            if (summary) summary.innerText = `${activeDays} dias ativos · ${totalCups} cafés`;
+
+            container.innerHTML = days.map(day => {
+                const label = day.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                const title = `${label}: ${day.count} café(s)`;
+                return `<div class="coffee-day-cell ${day.count ? `level-${day.level}` : 'empty'}" data-count="${day.count || ''}" title="${title}">${day.date.getDate()}</div>`;
+            }).join('');
         }
 
         function drawFallbackChart(canvas, labels, values, title) {

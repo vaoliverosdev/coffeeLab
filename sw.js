@@ -1,4 +1,4 @@
-const CACHE_NAME = "coffee-lab-v15.0";
+const CACHE_NAME = "coffee-lab-v16.0";
 
 const APP_SHELL = [
     "/",
