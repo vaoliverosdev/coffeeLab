@@ -1397,10 +1397,10 @@ async function apiFetch(
             coffeeGrid.innerHTML = state.coffees.map(c => `
             <div class="coffee-card">
                 <button class="coffee-card-fav" onclick="window.coffeeActions.toggleFav(${c.id},
-    ${c.is_favorite})">${c.is_favorite ? 'â­' : 'â˜†'}</button>
+    ${c.is_favorite})">${c.is_favorite ? '&#9733;' : '&#9734;'}</button>
                 <div class="coffee-card-img-wrapper"
     onclick="window.coffeeActions.triggerPhotoUpload(${c.id})">
-                ${c.photo_url ? `<img src="${c.photo_url}" alt="${c.name}" loading="lazy" decoding="async">` : '<span class="placeholder-icon">☕</span>'}
+                ${c.photo_url ? `<img src="${c.photo_url}" alt="${c.name}" loading="lazy" decoding="async">` : '<span class="placeholder-icon">&#9749;</span>'}
                 ${c.sca_score ? `<span class="coffee-card-sca">SCA ${c.sca_score}</span>` : ''}
                 </div>
                 <div class="coffee-card-content">
@@ -1827,7 +1827,7 @@ async function apiFetch(
             return `
                 <div class="coffee-card">
                 <button class="coffee-card-fav" onclick="window.recipeActions.toggleFav(${r.id},
-    ${r.is_favorite})">${r.is_favorite ? 'â­' : 'â˜†'}</button>
+    ${r.is_favorite})">${r.is_favorite ? '&#9733;' : '&#9734;'}</button>
                 <div class="coffee-card-content" style="padding-top:28px;">
                     <div class="recipe-method-badge">${r.method}</div>
                     <h3 class="coffee-card-title">${r.name}</h3>
@@ -1857,7 +1857,7 @@ async function apiFetch(
                     <div class="coffee-card-actions">
                     <button class="btn btn-sm" style="background:#22c55e;"
     onclick="window.recipeActions.startExtraction(${r.id})">
-    ☕
+    &#9749;
     Preparar</button>
                     <button class="btn btn-sm btn-secondary"
     onclick="window.recipeActions.openEdit(${r.id})">Editar</button>
@@ -2217,7 +2217,7 @@ async function apiFetch(
                 <div class="card" style="text-align:center; color:var(--text-secondary); padding: 40px
     20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
                 <span style="font-size: 32px; display:block; margin-bottom: 12px;">
-    ☕
+    &#9749;
     </span>
                 Nenhuma extração registrada ainda. Prepare uma receita no Modo Guiado para
     iniciar seu histórico!
@@ -2739,7 +2739,7 @@ async function fetchAndRenderBeverages() {
         list.innerHTML = beverages.map(b => `
             <div class="card" style="border-top: 4px solid ${b.is_cold ? '#3b82f6' : '#ef4444'};">
                 <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <h3 style="margin-bottom: 4px;">${b.is_cold ? '🧊' : '☕'} ${b.name}</h3>
+                    <h3 style="margin-bottom: 4px;">${b.is_cold ? '&#129482;' : '&#9749;'} ${b.name}</h3>
                     <div style="display:flex; gap: 6px;">
                         <button onclick="shareCoffeeLabItem('beverage', ${b.id})" class="btn btn-sm btn-share" style="width:auto;">Compartilhar</button>
                         <button onclick="editBeverage(${b.id})" class="btn btn-sm btn-secondary" style="width:auto;">Editar</button>
@@ -2889,7 +2889,7 @@ window.editBeverage = async (id) => {
         if (!navigator.onLine) {
         appendChatMessage('user', messageText);
         chatInput.value = '';
-        appendChatMessage('assistant', 'Barista IA indispon?vel offline.');
+        appendChatMessage('assistant', 'Barista IA indisponível offline.');
         return;
         }
 
@@ -2922,7 +2922,7 @@ window.editBeverage = async (id) => {
         await loadAiSessions(true);
         } catch (err) {
         // Captura falha de conexão no fetch ou resposta com erro
-        appendChatMessage('assistant', 'Barista IA indispon?vel offline.');
+        appendChatMessage('assistant', 'Barista IA indisponível offline.');
         console.warn("IA indisponível ou sem conexão:", err.message);
         }
     });
@@ -3069,7 +3069,7 @@ window.editBeverage = async (id) => {
     if (chatMessagesContainer) chatMessagesContainer.innerHTML = '';
 
     if (false && !navigator.onLine) {
-        appendChatMessage('assistant', 'Barista IA indispon?vel offline.');
+        appendChatMessage('assistant', 'Barista IA indisponível offline.');
         return;
     }
 
@@ -3080,7 +3080,7 @@ window.editBeverage = async (id) => {
         });
     } catch (err) {
         console.error("Erro ao carregar mensagens da sessão:", err);
-        appendChatMessage('assistant', 'Barista IA indispon?vel offline.');
+        appendChatMessage('assistant', 'Barista IA indisponível offline.');
     }
 
     loadAiSessions(true);

@@ -34,7 +34,7 @@
     <div id="auth-screen" class="auth-wrapper hidden">
         <div class="auth-card">
             <div class="auth-header">
-                <span class="logo-icon">☕</span>
+                <span class="logo-icon">&#9749;</span>
                 <h2>Coffee Lab</h2>
                 <p id="auth-subtitle">Entre na sua conta para acessar seus cafés e receitas</p>
             </div>
@@ -88,8 +88,8 @@
     <div id="app" class="hidden">
         <header class="topbar">
             <div class="brand">
-                <button id="app-menu-toggle" class="icon-btn app-menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false">☰</button>
-                <span class="logo-icon">☕</span>
+                <button id="app-menu-toggle" class="icon-btn app-menu-toggle" type="button" aria-label="Abrir menu" aria-expanded="false">&#9776;</button>
+                <span class="logo-icon">&#9749;</span>
                 <span class="logo-text">Coffee Lab</span>
             </div>
             <div class="topbar-actions">
@@ -446,16 +446,16 @@
     </div>
 
 <!-- JANELINHA (MODAL) DE DIÁRIO SENSORIAL -->
-<div id="modal-sensory" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 16px; backdrop-filter: blur(4px);">
+<div id="legacy-modal-sensory" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 16px; backdrop-filter: blur(4px);">
     <div class="card" style="width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; position: relative; background: #18181b; border: 1px solid #27272a; padding: 24px;">
         
         <!-- Botão de Fechar (X) no topo direito -->
-        <button type="button" onclick="document.getElementById('modal-sensory').style.display='none'" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+        <button type="button" onclick="document.getElementById('legacy-modal-sensory').style.display='none'" style="position: absolute; top: 16px; right: 16px; background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-secondary);">&times;</button>
         
         <h3 style="margin-top: 0; margin-bottom: 4px; font-size: 18px; color: #f4f4f5;">Registrar Degustação</h3>
         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">Avalie os atributos sensoriais da xícara (escala de 1 a 10).</p>
         
-        <form id="sensory-form" class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+        <form id="legacy-sensory-form" class="form-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Café Avaliado *</label>
                 <!-- <select id="sensory-coffee-id" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
@@ -465,48 +465,48 @@
             
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Extração Relacionada (Opcional)</label>
-                <select id="sensory-extraction-id" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <select id="legacy-sensory-extraction-id" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
                     <option value="">Nenhuma / Avulsa</option>
                 </select>
             </div>
 
             <div class="form-group">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🌸 Aroma (1-10)</label>
-                <input type="number" id="sensory-aroma" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="number" id="legacy-sensory-aroma" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍋 Acidez (1-10)</label>
-                <input type="number" id="sensory-acidity" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="number" id="legacy-sensory-acidity" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">💧 Corpo (1-10)</label>
-                <input type="number" id="sensory-body" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="number" id="legacy-sensory-body" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍬 Doçura (1-10)</label>
-                <input type="number" id="sensory-sweetness" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="number" id="legacy-sensory-sweetness" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">✨ Finalização / Aftertaste (1-10)</label>
-                <input type="number" id="sensory-aftertaste" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="number" id="legacy-sensory-aftertaste" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
 
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Notas Percebidas</label>
-                <input type="text" id="sensory-perceived" placeholder="Ex: Mel, Limão Siciliano, Chocolate" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="text" id="legacy-sensory-perceived" placeholder="Ex: Mel, Limão Siciliano, Chocolate" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Notas Não Percebidas (da embalagem)</label>
-                <input type="text" id="sensory-unperceived" placeholder="Ex: Jasmim, Noz-moscada" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
+                <input type="text" id="legacy-sensory-unperceived" placeholder="Ex: Jasmim, Noz-moscada" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Observações Gerais</label>
-                <textarea id="sensory-comments" rows="3" placeholder="Impressões sobre a extração, temperatura ou moagem..." class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5; resize: vertical;"></textarea>
+                <textarea id="legacy-sensory-comments" rows="3" placeholder="Impressões sobre a extração, temperatura ou moagem..." class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5; resize: vertical;"></textarea>
             </div>
             
             <!-- Botões de Ação do Modal -->
             <div style="grid-column: 1 / -1; margin-top: 10px; display: flex; gap: 12px; justify-content: flex-end;">
-                <button type="button" class="btn" onclick="document.getElementById('modal-sensory').style.display='none'" style="background: transparent; border: 1px solid #27272a; color: #f4f4f5; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancelar</button>
+                <button type="button" class="btn" onclick="document.getElementById('legacy-modal-sensory').style.display='none'" style="background: transparent; border: 1px solid #27272a; color: #f4f4f5; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancelar</button>
                 <button type="submit" class="btn btn-primary" style="padding: 10px 20px; border-radius: 6px; cursor: pointer;">Salvar Registro</button>
             </div>
         </form>
@@ -1022,7 +1022,7 @@
 </div>
 
     <script>
-        document.getElementById('modal-sensory')?.remove();
+        document.getElementById('legacy-modal-sensory')?.remove();
     </script>
     <script src="/static/js/app.js"></script>
 </body>
