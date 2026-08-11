@@ -1255,6 +1255,174 @@ select.input option {
   }
 }
 
+/* Fase 18: camada final de responsividade para evitar escala desktop em celular. */
+@media (max-width: 1024px) {
+  html {
+    font-size: 17px !important;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  #app {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+      "topbar"
+      "main" !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+  }
+
+  #app.app-sidebar-hidden {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .topbar {
+    grid-area: topbar !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 64px;
+    position: sticky;
+    top: 0;
+    z-index: 1500;
+  }
+
+  .sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: min(86vw, 320px) !important;
+    max-width: 320px !important;
+    z-index: 1800 !important;
+    transform: translateX(-105%) !important;
+    transition: transform .24s ease !important;
+    overflow-y: auto !important;
+  }
+
+  #app.mobile-sidebar-open .sidebar {
+    transform: translateX(0) !important;
+  }
+
+  .main {
+    grid-area: main !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    min-width: 0 !important;
+    padding: 22px clamp(14px, 4vw, 22px) 34px !important;
+    overflow-x: hidden !important;
+  }
+
+  .view,
+  .card,
+  .toolbar,
+  .coffee-card,
+  .coffee-card-content,
+  .share-editor-card,
+  .ai-chat-wrapper {
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .view-header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+  }
+
+  .view-header h1 {
+    font-size: clamp(1.75rem, 7vw, 2.35rem) !important;
+    line-height: 1.05 !important;
+  }
+
+  .view-header p {
+    font-size: 1rem !important;
+    line-height: 1.45 !important;
+  }
+
+  .toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .toolbar button,
+  .btn,
+  .btn-sm,
+  .icon-btn,
+  .nav-link {
+    min-height: 44px !important;
+  }
+
+  .cards,
+  .grid-cards,
+  .coffee-grid-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
+  }
+
+  .coffee-card-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .coffee-card-actions .btn,
+  .coffee-card-actions .btn-sm,
+  .coffee-card-actions .btn-danger-text {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    white-space: normal !important;
+  }
+
+  .coffee-meta-grid,
+  .recipe-meta-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    font-size: .92rem !important;
+  }
+
+  .motor-card .form-row,
+  .form-row {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar {
+    padding: 0 10px !important;
+  }
+
+  .brand span:last-child {
+    font-size: .95rem !important;
+  }
+
+  .main {
+    padding: 18px 12px 30px !important;
+  }
+
+  .card,
+  .coffee-card-content {
+    padding: 16px !important;
+  }
+
+  .coffee-card-actions {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

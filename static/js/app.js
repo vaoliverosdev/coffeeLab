@@ -1038,7 +1038,7 @@ async function apiFetch(
 ) {
     options.headers = options.headers || {};
 
-    // 💡 AJUSTE AQUI: Busca no state OU no localStorage correto
+    // Busca no state OU no localStorage correto.
     const token = state.token || localStorage.getItem('coffee_lab_token') || localStorage.getItem('token');
 
     if (token) {
@@ -1859,7 +1859,7 @@ async function apiFetch(
             <input type="text" class="recipe-step-input-field" required placeholder="Ex: Despejar
     50g de água..." value="${val}">
             <button type="button" class="btn-remove-step"
-    onclick="this.parentElement.remove()">×</button>
+    onclick="this.parentElement.remove()">&times;</button>
             `;
             recipeStepsBuilder.appendChild(div);
         }
@@ -2218,7 +2218,7 @@ async function apiFetch(
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;
     border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px;">
                     <div>
-                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">📅${date}</span>
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${date}</span>
                     <h3 style="margin: 4px 0 0 0; font-size: 16px; color:
     var(--text-primary);">${recipeName}</h3>
                     </div>
@@ -2302,20 +2302,11 @@ async function apiFetch(
 
                 if (motorFeedback) {
                     if (w > 500) {
-                    motorFeedback.innerText = `
-    ⚠
-    Volume alto (1:${r.toFixed(1)}). Recomendamos
-    engrossar a granulometria para evitar super-extração.`;
+                    motorFeedback.innerText = `Atenção: volume alto (1:${r.toFixed(1)}). Recomendamos engrossar a granulometria para evitar super-extração.`;
                     } else if (w < 150 && w > 0) {
-                    motorFeedback.innerText = `
-    💡
-    Volume baixo (1:${r.toFixed(1)}). Sugere-se
-    moagem levemente mais fina para reter o fluxo.`;
+                    motorFeedback.innerText = `Dica: volume baixo (1:${r.toFixed(1)}). Sugere-se moagem levemente mais fina para reter o fluxo.`;
                     } else if (w > 0) {
-                    motorFeedback.innerText = `
-    ✅
-    Proporção equilibrada 1:${r.toFixed(1)} calculada
-    com sucesso.`;
+                    motorFeedback.innerText = `OK: proporção equilibrada 1:${r.toFixed(1)} calculada com sucesso.`;
                     }
                 }
                 }
@@ -2498,11 +2489,11 @@ function renderSensoryLogsList() {
             <div class="card" style="margin-bottom: 16px; background: var(--surface); padding: 18px; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px;">
                     <div>
-                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">📅 ${date}</span>
+                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${date}</span>
                         <h3 style="margin: 4px 0 0 0; font-size: 18px; color: var(--text-primary);">${coffeeName}${roastery}</h3>
                     </div>
                     <span style="background: var(--accent-light, rgba(230, 81, 0, 0.1)); color: var(--accent); font-weight: bold; font-size: 14px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--accent);">
-                        ★ ${avgScore} / 5
+                        &#9733; ${avgScore} / 5
                     </span>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; background: var(--surface-raised); padding: 10px; border-radius: 6px; font-size: 13px; text-align: center;">
@@ -2962,7 +2953,7 @@ window.editBeverage = async (id) => {
         });
 
         const optionsBtn = document.createElement('button');
-        optionsBtn.innerText = '⋮';
+        optionsBtn.innerText = '...';
         optionsBtn.style.cssText = 'display: none; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 16px; padding: 0 4px; font-weight: bold; margin-left: 8px; flex-shrink: 0;';
 
         const menuDiv = document.createElement('div');

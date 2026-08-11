@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=17.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=18.0">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head><body>
     
@@ -24,7 +24,7 @@
     role="status"
     aria-live="polite"
 >
-    <span class="offline-indicator-icon">●</span>
+    <span class="offline-indicator-icon">&#9679;</span>
     <span id="offline-indicator-text">
         Você está offline
     </span>
@@ -96,7 +96,7 @@
                 <button id="install-pwa-btn" class="install-pwa-btn hidden" type="button">Instalar Coffee Lab </button>
                 <div class="notification-wrapper">
                     <button id="notifications-toggle" class="icon-btn notification-btn" type="button" aria-label="Notificações" aria-expanded="false">
-                        <span>🔔</span>
+                        <span aria-hidden="true">&#128276;</span>
                         <span id="notification-badge" class="notification-badge hidden">0</span>
                     </button>
                     <div id="notifications-panel" class="notifications-panel hidden">
@@ -112,7 +112,7 @@
                         </div>
                     </div>
                 </div>
-                <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; padding: 8px;">🌓</button>
+                <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; padding: 8px;" aria-label="Alternar tema">&#9681;</button>
                 <a href="#/profile" class="user-profile-btn" id="topbar-avatar-btn">
                     <img id="user-avatar-mini" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar">
                 </a>
@@ -262,7 +262,7 @@
                         <option value="roast_date">Torra mais Recente</option>
                     </select>
 
-                    <button class="icon-btn" id="btn-filter-fav" aria-label="Apenas Favoritos" title="Apenas Favoritos">⭐</button>
+                    <button class="icon-btn" id="btn-filter-fav" aria-label="Apenas Favoritos" title="Apenas Favoritos">&#9733;</button>
                 </div>
 
                 <div id="coffee-grid" class="coffee-grid-layout">
@@ -345,7 +345,7 @@
                         <option value="Prensa Francesa">Prensa Francesa</option>
                         <option value="Espresso">Espresso</option>
                     </select>
-                    <button class="icon-btn" id="btn-filter-recipe-fav" title="Apenas Favoritas">⭐</button>
+                    <button class="icon-btn" id="btn-filter-recipe-fav" title="Apenas Favoritas">&#9733;</button>
                 </div>
 
                 <div id="recipe-grid" class="coffee-grid-layout">
@@ -394,14 +394,14 @@
     
     <div class="cards" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-bottom: 24px;">
         <div class="card">
-            <h3>📊 Resumo do Perfil</h3>
+            <h3>Resumo do Perfil</h3>
             <div id="explorer-summary-metrics" style="margin-top: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 8px;">
                 Carregando dados do seu paladar...
             </div>
         </div>
         
         <div class="card">
-            <h3>💡 Sugestões do Especialista</h3>
+            <h3>Sugestões do Especialista</h3>
             <ul id="explorer-suggestions-list" style="margin-top: 12px; padding-left: 20px; font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px;">
                 <li>Carregando recomendações...</li>
             </ul>
@@ -409,16 +409,16 @@
     </div>
 
     <div class="card" style="margin-top: 20px;">
-        <h3>🎨 Roda Sensorial Interativa (Flavor Wheel)</h3>
+        <h3>Roda Sensorial Interativa (Flavor Wheel)</h3>
         <p style="font-size: 13px; color: var(--text-secondary);">Clique nas famílias sensoriais para explorar os atributos e notas de catação.</p>
         
         <div class="sensory-wheel-container" style="margin-top: 20px;">
             <div class="flavor-grid">
-                <button class="flavor-btn" style="background:#ef4444; color:white;" onclick="window.explorerActions.showFlavorDetail('Frutado', 'Frutas vermelhas, cítricas, mirtilo, limão e maçã.')">🍎 Frutado</button>
-                <button class="flavor-btn" style="background:#f59e0b; color:white;" onclick="window.explorerActions.showFlavorDetail('Doces & Caramelo', 'Mel, açúcar mascavo, caramelo, baunilha e melaço.')">🍯 Doce / Caramelo</button>
-                <button class="flavor-btn" style="background:#8b5cf6; color:white;" onclick="window.explorerActions.showFlavorDetail('Floral', 'Jasmim, flor de laranjeira, camomila e rosas.')">🌸 Floral</button>
-                <button class="flavor-btn" style="background:#78350f; color:white;" onclick="window.explorerActions.showFlavorDetail('Chocolate & Nozes', 'Cacau 70%, avelã, amêndoas e nozes.')">🍫 Chocolate / Nozes</button>
-                <button class="flavor-btn" style="background:#10b981; color:white;" onclick="window.explorerActions.showFlavorDetail('Especiarias', 'Canela, noz-moscada, cravo e pimenta branca.')">🌿 Especiarias</button>
+                <button class="flavor-btn" style="background:#ef4444; color:white;" onclick="window.explorerActions.showFlavorDetail('Frutado', 'Frutas vermelhas, cítricas, mirtilo, limão e maçã.')">Frutado</button>
+                <button class="flavor-btn" style="background:#f59e0b; color:white;" onclick="window.explorerActions.showFlavorDetail('Doces & Caramelo', 'Mel, açúcar mascavo, caramelo, baunilha e melaço.')">Doce / Caramelo</button>
+                <button class="flavor-btn" style="background:#8b5cf6; color:white;" onclick="window.explorerActions.showFlavorDetail('Floral', 'Jasmim, flor de laranjeira, camomila e rosas.')">Floral</button>
+                <button class="flavor-btn" style="background:#78350f; color:white;" onclick="window.explorerActions.showFlavorDetail('Chocolate & Nozes', 'Cacau 70%, avelã, amêndoas e nozes.')">Chocolate / Nozes</button>
+                <button class="flavor-btn" style="background:#10b981; color:white;" onclick="window.explorerActions.showFlavorDetail('Especiarias', 'Canela, noz-moscada, cravo e pimenta branca.')">Especiarias</button>
             </div>
             <div id="flavor-detail-box" class="card" style="margin-top: 16px; background: var(--surface); display:none;">
                 <h4 id="flavor-detail-title" style="margin:0 0 6px 0;"></h4>
@@ -471,23 +471,23 @@
             </div>
 
             <div class="form-group">
-                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🌸 Aroma (1-10)</label>
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Aroma (1-10)</label>
                 <input type="number" id="legacy-sensory-aroma" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
-                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍋 Acidez (1-10)</label>
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Acidez (1-10)</label>
                 <input type="number" id="legacy-sensory-acidity" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
-                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">💧 Corpo (1-10)</label>
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Corpo (1-10)</label>
                 <input type="number" id="legacy-sensory-body" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group">
-                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">🍬 Doçura (1-10)</label>
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Doçura (1-10)</label>
                 <input type="number" id="legacy-sensory-sweetness" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
             <div class="form-group" style="grid-column: 1 / -1;">
-                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">✨ Finalização / Aftertaste (1-10)</label>
+                <label style="display: block; font-size: 13px; margin-bottom: 6px; color: #d4d4d8;">Finalização / Aftertaste (1-10)</label>
                 <input type="number" id="legacy-sensory-aftertaste" min="1" max="10" value="7" class="form-control" style="width: 100%; padding: 10px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; color: #f4f4f5;">
             </div>
 
@@ -534,7 +534,7 @@
       <!-- 1. TOPO / HEADER (Com botão Hambúrguer ÚNICO + Título) -->
       <div class="ai-chat-header">
         <button id="ai-toggle-sidebar" class="btn-hamburger" title="Alternar Histórico">
-          ☰
+          &#9776;
         </button>
         <div>
           <h1 style="margin: 0; font-size: 16px; font-weight: 600;">Barista de IA</h1>
@@ -655,7 +655,7 @@
         <div class="modal-card">
             <div class="modal-header">
                 <h2 id="modal-coffee-title">Adicionar Grão Especial</h2>
-                <button class="modal-close" id="modal-coffee-close">✕</button>
+                <button class="modal-close" id="modal-coffee-close">&times;</button>
             </div>
             <form id="coffee-form" class="modal-body">
                 <input type="hidden" id="form-coffee-id">
@@ -737,7 +737,7 @@
         <div class="modal-card" style="max-width: 400px;">
             <div class="modal-header">
                 <h2>Registrar Compra / Entrada</h2>
-                <button class="modal-close" id="modal-refill-close">✕</button>
+                <button class="modal-close" id="modal-refill-close">&times;</button>
             </div>
             <form id="stock-refill-form" class="modal-body">
                 <input type="hidden" id="refill-stock-id">
@@ -761,7 +761,7 @@
         <div class="modal-card" style="max-width: 400px;">
             <div class="modal-header">
                 <h2>Configurar Níveis e Alertas</h2>
-                <button class="modal-close" id="modal-adjust-close">✕</button>
+                <button class="modal-close" id="modal-adjust-close">&times;</button>
             </div>
             <form id="stock-adjust-form" class="modal-body">
                 <input type="hidden" id="adjust-stock-id">
@@ -785,7 +785,7 @@
         <div class="modal-card" style="max-width: 540px;">
             <div class="modal-header">
                 <h2>Histórico de Movimentações</h2>
-                <button class="modal-close" id="modal-history-close">✕</button>
+                <button class="modal-close" id="modal-history-close">&times;</button>
             </div>
             <div class="modal-body">
                 <ul id="stock-history-list" class="history-log-list">
@@ -894,7 +894,7 @@
     <div class="modal-card" style="max-width: 550px;">
         <div class="modal-header">
             <h3>Nova Bebida do Cardápio</h3>
-            <button type="button" class="modal-close" onclick="const m = document.getElementById('modal-beverage'); m.classList.add('hidden'); m.style.display='none';">✕</button>
+            <button type="button" class="modal-close" onclick="const m = document.getElementById('modal-beverage'); m.classList.add('hidden'); m.style.display='none';">&times;</button>
         </div>
         <form id="beverage-form" class="modal-body" style="display:flex; flex-direction:column; gap: 12px; margin-top: 15px;">
             <input type="hidden" id="bev-id">
@@ -918,7 +918,7 @@
             </div>
             <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
                 <input type="checkbox" id="bev-iscold" style="width: 18px; height: 18px;">
-                <label for="bev-iscold" style="margin: 0; cursor: pointer;">É uma bebida gelada? 🧊</label>
+                <label for="bev-iscold" style="margin: 0; cursor: pointer;">É uma bebida gelada?</label>
             </div>
             <div>
                 <label for="bev-desc">Modo de Preparo / Descrição</label>
@@ -937,7 +937,7 @@
     <div class="modal-card" style="max-width: 550px;">
         <div class="modal-header">
             <h3>Registrar Degustação</h3>
-            <button type="button" class="modal-close" onclick="const m = document.getElementById('sensory-modal'); m.classList.add('hidden'); m.style.display='none';">✕</button>
+            <button type="button" class="modal-close" onclick="const m = document.getElementById('sensory-modal'); m.classList.add('hidden'); m.style.display='none';">&times;</button>
         </div>
         <form id="sensory-form" class="modal-body" style="display:flex; flex-direction:column; gap: 12px; margin-top: 15px;">
             <label>Selecione o Café:
@@ -1024,6 +1024,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=17.1"></script>
+    <script src="/static/js/app.js?v=18.0"></script>
 </body>
 </html>
