@@ -1813,67 +1813,44 @@ async function apiFetch(
         function renderRecipeGrid() {
             if (!recipeGrid) return;
             if (state.recipes.length === 0) {
-            recipeGrid.innerHTML = `<div class="card" style="grid-column:1/-1; text-align:center;
-    color:var(--text-secondary);">Nenhuma receita cadastrada.</div>`;
-            return;
+                recipeGrid.innerHTML = `<div class="card" style="grid-column:1/-1; text-align:center; color:var(--text-secondary);">Nenhuma receita cadastrada.</div>`;
+                return;
             }
             recipeGrid.innerHTML = state.recipes.map(r => {
-            const ratio = (r.water_weight / r.coffee_weight).toFixed(1);
-            const stepsList = r.steps && r.steps.length > 0 ? `<ol
-    class="recipe-preview-steps">${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>` : '';
-            const coffeeBind = r.coffee ? `
-    ðŸŒ
-    <b>Grão:</b> ${r.coffee.name}` : '✨ <b>Grão:</b> Qualquer grão livre';
-            return `
-                <div class="coffee-card">
-                <button class="coffee-card-fav" onclick="window.recipeActions.toggleFav(${r.id},
-    ${r.is_favorite})">${r.is_favorite ? '&#9733;' : '&#9734;'}</button>
-                <div class="coffee-card-content" style="padding-top:28px;">
-                    <div class="recipe-method-badge">${r.method}</div>
-                    <h3 class="coffee-card-title">${r.name}</h3>
-                    <div style="font-size:13px; color:var(--text-secondary); margin: 6px 0 12px;">
-                    ${coffeeBind}
-                    </div>
-                    <div class="coffee-meta-grid">
-                    <div>
-    ⚖
-    <b>Café:</b> ${r.coffee_weight}g</div>
-                    <div>
-    💧
-    <b>Água:</b> ${r.water_weight}g <span
-    class="recipe-ratio-tag">1:${ratio}</span></div>
-                    <div>
-    🪵
-    <b>Moagem:</b> ${r.grind_size || 'N/A'}</div>
-                    <div>
-    🌡
-    <b>Temp:</b> ${r.water_temp ? `${r.water_temp}°C` : 'N/A'}</div>
-                    </div>
-                    ${r.description ? `<p style="font-size:12px; margin: 8px 0; line-height:1.4;">
-    ðŸ“
-
-    ${r.description}</p>` : ''}
-                    ${stepsList}
-                    <div class="coffee-card-actions">
-                    <button class="btn btn-sm" style="background:#22c55e;"
-    onclick="window.recipeActions.startExtraction(${r.id})">
-    &#9749;
-    Preparar</button>
-                    <button class="btn btn-sm btn-secondary"
-    onclick="window.recipeActions.openEdit(${r.id})">Editar</button>
-                    <button class="btn btn-sm btn-secondary" style="color:var(--accent);"
-    onclick="window.recipeActions.duplicate(${r.id})">Duplicar</button>
-                    <button class="btn btn-sm btn-share"
-    onclick="window.shareCoffeeLabItem('recipe', ${r.id})">Compartilhar</button>
-                    <button class="btn-danger-text"
-    onclick="window.recipeActions.deleteRecipe(${r.id})">Excluir</button>
+                const ratio = (r.water_weight / r.coffee_weight).toFixed(1);
+                const stepsList = r.steps && r.steps.length > 0
+                    ? `<ol class="recipe-preview-steps">${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>`
+                    : '';
+                const coffeeBind = r.coffee
+                    ? `<span class="recipe-card-icon">&#127793;</span> <b>Gr&#227;o:</b> ${r.coffee.name}`
+                    : `<span class="recipe-card-icon">&#10024;</span> <b>Gr&#227;o:</b> Qualquer gr&#227;o livre`;
+                return `
+                <div class="coffee-card recipe-card">
+                    <button class="coffee-card-fav" aria-label="${r.is_favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" onclick="window.recipeActions.toggleFav(${r.id}, ${r.is_favorite})">${r.is_favorite ? '&#9733;' : '&#9734;'}</button>
+                    <div class="coffee-card-content recipe-card-content">
+                        <div class="recipe-method-badge">${r.method}</div>
+                        <h3 class="coffee-card-title">${r.name}</h3>
+                        <div class="recipe-coffee-bind">${coffeeBind}</div>
+                        <div class="coffee-meta-grid recipe-meta-grid">
+                            <div><span class="recipe-card-icon">&#9878;</span> <b>Caf&#233;:</b> ${r.coffee_weight}g</div>
+                            <div><span class="recipe-card-icon">&#128167;</span> <b>&#193;gua:</b> ${r.water_weight}g <span class="recipe-ratio-tag">1:${ratio}</span></div>
+                            <div><span class="recipe-card-icon">&#9749;</span> <b>Moagem:</b> ${r.grind_size || 'N/A'}</div>
+                            <div><span class="recipe-card-icon">&#127777;</span> <b>Temp:</b> ${r.water_temp ? `${r.water_temp}&deg;C` : 'N/A'}</div>
+                        </div>
+                        ${r.description ? `<p class="recipe-card-description"><span class="recipe-card-icon">&#9997;</span> ${r.description}</p>` : ''}
+                        ${stepsList}
+                        <div class="coffee-card-actions recipe-card-actions">
+                            <button class="btn btn-sm btn-prepare" onclick="window.recipeActions.startExtraction(${r.id})"><span>&#9749;</span> Preparar</button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.openEdit(${r.id})">Editar</button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.duplicate(${r.id})">Duplicar</button>
+                            <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('recipe', ${r.id})">Compartilhar</button>
+                            <button class="btn-danger-text" onclick="window.recipeActions.deleteRecipe(${r.id})">Excluir</button>
+                        </div>
                     </div>
                 </div>
-                </div>
-            `;
+                `;
             }).join('');
         }
-
         function addStepRow(val = "") {
             if (!recipeStepsBuilder) return;
             const div = document.createElement('div');
@@ -2256,7 +2233,7 @@ async function apiFetch(
                 ${ext.notes ? `<div style="font-size: 13px; background: rgba(0,0,0,0.2); padding: 8px;
     border-radius: 6px; font-style: italic; margin-top: 4px; border-left: 3px solid var(--accent);
     color: var(--text-secondary);">
-    ðŸ“
+    <span class="recipe-card-icon">&#9997;</span>
     ${ext.notes}</div>` : ''}
                 <div class="coffee-card-actions" style="margin-top:8px;">
                     <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('extraction', ${ext.id})">Compartilhar PNG</button>
@@ -2501,7 +2478,7 @@ function renderSensoryLogsList() {
     if (!state.sensoryLogs || !Array.isArray(state.sensoryLogs) || state.sensoryLogs.length === 0) {
         container.innerHTML = `
             <div class="card" style="text-align:center; color:var(--text-secondary); padding: 40px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
-                <span style="font-size: 32px; display:block; margin-bottom: 12px;">ðŸ“</span>
+                <span style="font-size: 32px; display:block; margin-bottom: 12px;">&#9997;</span>
                 Nenhum registro sensorial cadastrado ainda. Clique em "+ Nova Degustação" para avaliar seu primeiro café!
             </div>`;
         return;
@@ -4015,7 +3992,7 @@ window.editBeverage = async (id) => {
             initShareStoryEditor();
             const appShell = document.getElementById('app');
             const appMenuToggle = document.getElementById('app-menu-toggle');
-            const isMobileLayout = () => window.matchMedia('(max-width: 768px)').matches;
+            const isMobileLayout = () => window.matchMedia('(max-width: 1024px)').matches;
 
             function closeAppSidebarOnMobile() {
                 if (!appShell || !isMobileLayout()) return;
