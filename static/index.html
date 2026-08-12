@@ -11,7 +11,14 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/style.css?v=18.0">
+    <script>
+        (function () {
+            var coarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+            var compactScreen = Math.min(screen.width || 9999, window.innerWidth || 9999) <= 820;
+            if (coarsePointer || compactScreen) document.documentElement.classList.add("coffee-lab-mobile");
+        })();
+    </script>
+    <link rel="stylesheet" href="/static/css/style.css?v=18.1">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head><body>
     
@@ -1024,6 +1031,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=18.0"></script>
+    <script src="/static/js/app.js?v=18.1"></script>
 </body>
 </html>

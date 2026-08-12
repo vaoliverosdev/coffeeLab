@@ -1,10 +1,10 @@
-const CACHE_NAME = "coffee-lab-v18.0";
+const CACHE_NAME = "coffee-lab-v18.1";
 
 const APP_SHELL = [
     "/",
     "/static/index.html",
-    "/static/css/style.css?v=18.0",
-    "/static/js/app.js?v=18.0",
+    "/static/css/style.css?v=18.1",
+    "/static/js/app.js?v=18.1",
     "/static/manifest.json",
     "/static/icons/icon-192.png",
     "/static/icons/icon-512.png"

@@ -3983,7 +3983,20 @@ window.editBeverage = async (id) => {
             initShareStoryEditor();
             const appShell = document.getElementById('app');
             const appMenuToggle = document.getElementById('app-menu-toggle');
-            const isMobileLayout = () => window.matchMedia('(max-width: 1024px)').matches;
+            const detectsMobileLayout = () =>
+                window.matchMedia('(max-width: 1024px)').matches ||
+                window.matchMedia('(pointer: coarse)').matches ||
+                Math.min(window.innerWidth || 9999, window.screen?.width || 9999) <= 820;
+
+            const isMobileLayout = () =>
+                document.documentElement.classList.contains('coffee-lab-mobile') ||
+                detectsMobileLayout();
+
+            function syncMobileLayoutClass() {
+                document.documentElement.classList.toggle('coffee-lab-mobile', detectsMobileLayout());
+            }
+
+            syncMobileLayoutClass();
 
             function closeAppSidebarOnMobile() {
                 if (!appShell || !isMobileLayout()) return;
@@ -4008,6 +4021,7 @@ window.editBeverage = async (id) => {
 
             window.addEventListener('resize', () => {
                 if (!appShell) return;
+                syncMobileLayoutClass();
                 if (!isMobileLayout()) {
                     appShell.classList.remove('mobile-sidebar-open');
                     appMenuToggle?.setAttribute('aria-expanded', String(!appShell.classList.contains('app-sidebar-hidden')));
