@@ -1,21 +1,24 @@
 # Coffee Lab
 
-Coffee Lab e uma aplicacao web para gerenciar cafes especiais, estoque, receitas, extracoes, diario sensorial, bebidas autorais, estatisticas e um Barista de IA integrado via OpenRouter.
+Coffee Lab e uma aplicacao web para gerenciar cafes especiais, estoque, receitas, extracoes, diario sensorial, bebidas autorais, estatisticas, PWA offline e um Barista de IA integrado via OpenRouter.
 
-O projeto usa FastAPI, SQLAlchemy 2.0, PostgreSQL/NeonDB e frontend Vanilla HTML/CSS/JavaScript com suporte PWA.
+O projeto usa FastAPI, SQLAlchemy 2.0, PostgreSQL/NeonDB e frontend Vanilla HTML/CSS/JavaScript.
 
 ## Funcionalidades
 
-- Cadastro, login, perfil, avatar e sessao persistente.
+- Cadastro, login, recuperacao de senha, perfil, avatar e sessao persistente.
 - Biblioteca de cafes com CRUD, fotos, favoritos, busca, filtros e ordenacao.
 - Controle de estoque com compras, abertura de pacotes, ajustes e historico de movimentacoes.
-- Livro de receitas com etapas, favoritos, duplicacao e modo guiado.
+- Livro de receitas com etapas, favoritos, duplicacao, compartilhamento e modo guiado.
+- Motor inteligente para ratio, agua e cafe.
 - Cronometro de preparo com registro automatico de extracao.
 - Diario sensorial e explorador de perfil sensorial.
-- Caderno de bebidas.
+- Caderno de bebidas autorais.
 - Barista de IA com historico de conversas.
-- Dashboard de estatisticas com Chart.js.
+- Dashboard de estatisticas com Chart.js e calendario de atividade.
 - PWA instalavel com app shell offline, cache de GETs e fila de escritas offline.
+- Notificacoes locais para hora do cafe, estoque e conquistas.
+- Compartilhamento social em PNG para cafes, receitas, bebidas e extracoes.
 
 ## Stack
 
@@ -33,18 +36,18 @@ O projeto usa FastAPI, SQLAlchemy 2.0, PostgreSQL/NeonDB e frontend Vanilla HTML
 
 ```text
 .
-├── main.py                 # Rotas FastAPI, API e servidor do frontend
-├── core.py                 # Configuracoes, banco, modelos SQLAlchemy e schemas Pydantic
-├── requirements.txt        # Dependencias Python
-├── alembic.ini             # Configuracao Alembic
-├── alembic/                # Ambiente de migracoes
-├── static/
-│   ├── index.html          # SPA
-│   ├── css/style.css       # Interface
-│   ├── js/app.js           # Logica do frontend, offline e PWA
-│   ├── manifest.json       # Manifest PWA
-│   └── icons/              # Icones PWA
-└── sw.js                   # Service Worker
+|-- main.py                 # Rotas FastAPI, API e servidor do frontend
+|-- core.py                 # Configuracoes, banco, modelos SQLAlchemy e schemas Pydantic
+|-- requirements.txt        # Dependencias Python
+|-- alembic.ini             # Configuracao Alembic
+|-- alembic/                # Ambiente de migracoes
+|-- static/
+|   |-- index.html          # SPA
+|   |-- css/style.css       # Interface
+|   |-- js/app.js           # Logica do frontend, offline e PWA
+|   |-- manifest.json       # Manifest PWA
+|   `-- icons/              # Icones PWA
+`-- sw.js                   # Service Worker
 ```
 
 ## Configuracao Local
@@ -102,7 +105,7 @@ http://localhost:8000
 
 ## PWA e Offline
 
-A Fase 14 implementa:
+O app possui:
 
 - Manifest PWA valido.
 - Service Worker versionado.
@@ -119,7 +122,9 @@ A Fase 14 implementa:
 
 O Service Worker nao intercepta `/api/`, evitando cache inseguro de autenticacao ou respostas da IA. Dados de API sao controlados por `apiFetch()` em `static/js/app.js`.
 
-## Testes Manuais Recomendados
+Se o app instalado nao atualizar, remova o PWA instalado ou limpe os dados do site no navegador. O Service Worker usa versionamento de cache para facilitar atualizacoes.
+
+## Testes Recomendados
 
 1. Online: criar conta, logar, navegar por todas as secoes e cadastrar dados.
 2. Cache offline: abrir cafes, estoque, receitas, extracoes, diario sensorial, explorador, bebidas, estatisticas e historico de IA.
@@ -127,10 +132,10 @@ O Service Worker nao intercepta `/api/`, evitando cache inseguro de autenticacao
 4. Confirmar que a sessao permanece ativa e os dados carregados aparecem.
 5. Criar/editar/excluir dados offline e verificar o indicador de fila.
 6. Reconectar e confirmar sincronizacao, atualizacao da interface e fila vazia.
-7. Testar falha temporaria no servidor e confirmar que a acao fica na fila.
-8. Testar erro permanente e confirmar que a acao fica marcada para revisao.
-9. Instalar o PWA em navegador compativel e abrir novamente offline.
-10. Testar responsividade em desktop e mobile.
+7. Instalar o PWA em navegador compativel e abrir novamente offline.
+8. Testar responsividade em desktop, Android e iOS/Safari.
+9. Testar compartilhamento PNG em telas desktop e mobile.
+10. Testar notificacoes com permissao concedida e negada.
 
 ## Producao
 
@@ -143,9 +148,10 @@ Antes de publicar:
 - Valide limites e tipos de upload de imagens.
 - Revise logs e tratamento de erros.
 - Teste PWA em Chrome desktop, Android e iOS/Safari.
+- Configure variaveis de ambiente no provedor de deploy.
 
 ## Status
 
-Fases 0 a 13: implementadas.
+Fases 0 a 17: implementadas.
 
-Fase 14: em finalizacao, com foco em robustez offline, seguranca do cache por usuario e sincronizacao confiavel.
+Fase 18: em revisao final, com foco em testes gerais, responsividade mobile, PWA instalado, ajustes de producao, documentacao tecnica e validacao antes do uso intensivo.
