@@ -103,6 +103,32 @@ Acesse:
 http://localhost:8000
 ```
 
+## Deploy Gratuito
+
+O projeto esta preparado para deploy no Render usando `render.yaml`.
+
+Fluxo recomendado:
+
+1. Crie ou mantenha um banco PostgreSQL no Neon.
+2. Copie a connection string do Neon com SSL.
+3. Entre no Render e crie um novo Blueprint a partir deste repositorio.
+4. Configure as variaveis:
+   - `DATABASE_URL`
+   - `OPENROUTER_API_KEY`, se quiser usar o Barista de IA
+   - `SECRET_KEY`, se preferir definir manualmente
+5. O Render executara:
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+Observacoes:
+
+- O plano gratuito do Render e bom para testes e MVP, mas pode dormir quando fica sem acessos.
+- Para uso serio em producao, considere migrar para um plano pago pequeno.
+- Mantenha o banco no Neon para preservar dados entre deploys.
+
 ## PWA e Offline
 
 O app possui:
@@ -149,6 +175,22 @@ Antes de publicar:
 - Revise logs e tratamento de erros.
 - Teste PWA em Chrome desktop, Android e iOS/Safari.
 - Configure variaveis de ambiente no provedor de deploy.
+
+## Monetizacao com Anuncios
+
+O caminho mais comum e Google AdSense, mas a aprovacao depende de conteudo publico original, paginas institucionais e conformidade com politicas.
+
+Antes de solicitar AdSense, recomenda-se ter:
+
+- Dominio proprio.
+- Pagina "Sobre".
+- Pagina de privacidade.
+- Pagina de termos de uso.
+- Conteudo publico util, nao apenas uma area privada apos login.
+- Navegacao clara e sem telas quebradas no mobile.
+- Trafego real minimo para validar engajamento.
+
+Como o Coffee Lab e principalmente uma aplicacao logada, anuncios tendem a funcionar melhor em paginas publicas complementares, como blog, guias de preparo, receitas publicas e landing page. Dentro da area privada, anuncios podem atrapalhar a experiencia e reduzir retencao.
 
 ## Status
 
