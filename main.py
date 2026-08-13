@@ -637,6 +637,11 @@ async def ai_chat_unified(
             a tomar melhores decisões sobre seus cafés, receitas e extrações, utilizando de forma inteligente e fiel os dados disponíveis no contexto.
             Seu objetivo não é apenas responder perguntas: é ajudar o usuário a explorar, entender e melhorar sua experiência com café.
 
+            REGRA PRIORITARIA DE RESPOSTA CURTA:
+            Responda sempre direto ao ponto. Use no maximo 3 frases curtas ou 3 bullets, salvo quando o usuario pedir detalhes.
+            Nao escreva introducoes longas, explicacoes extensas, emojis, floreios ou repeticoes.
+            Se a pergunta pedir uma acao pratica, entregue primeiro a recomendacao objetiva e apenas 1 motivo tecnico breve.
+
             ════════════════════════════════════
             ESCOPO DE ATUAÇÃO
             ════════════════════════════════════
@@ -798,7 +803,12 @@ async def ai_chat_unified(
             "HTTP-Referer": "http://localhost:8000",
             "X-Title": "Coffee Lab",
         }
-        payload = {"model": "openrouter/auto", "messages": messages_payload}
+        payload = {
+            "model": "openrouter/auto",
+            "messages": messages_payload,
+            "temperature": 0.35,
+            "max_tokens": 420,
+        }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(

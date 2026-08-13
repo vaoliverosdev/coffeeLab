@@ -18,7 +18,7 @@
             if (coarsePointer || compactScreen) document.documentElement.classList.add("coffee-lab-mobile");
         })();
     </script>
-    <link rel="stylesheet" href="/static/css/style.css?v=18.1">
+    <link rel="stylesheet" href="/static/css/style.css?v=18.2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head><body>
     
@@ -147,12 +147,40 @@
 <main class="main" id="main">
             <!-- VIEW: DASHBOARD -->
             <section id="view-dashboard" class="view">
-                <h1 id="welcome-title">Bem-vindo, Barista!</h1>
-                <p>Aqui está o resumo do seu laboratório hoje.</p>
-                <div class="cards">
-                    <div class="card skeleton" style="height:120px"></div>
-                    <div class="card skeleton" style="height:120px"></div>
-                    <div class="card skeleton" style="height:120px"></div>
+                <div class="dashboard-hero">
+                    <div>
+                        <span class="dashboard-kicker">Coffee Lab</span>
+                        <h1 id="welcome-title">Bem-vindo, Barista!</h1>
+                        <p id="dashboard-subtitle">Seu laboratório pessoal para preparar, registrar e evoluir cafés especiais.</p>
+                    </div>
+                    <a href="#/recipes" class="btn btn-primary btn-auto">Preparar agora</a>
+                </div>
+                <div class="dashboard-grid">
+                    <div class="card dashboard-spotlight">
+                        <span class="dashboard-label">Ritual de hoje</span>
+                        <strong id="dashboard-main-metric">0 extrações</strong>
+                        <p id="dashboard-main-note">Registre seu primeiro preparo para acender o painel.</p>
+                    </div>
+                    <div class="card dashboard-mini-card">
+                        <span>Café favorito</span>
+                        <strong id="dashboard-fav-coffee">Nenhum ainda</strong>
+                    </div>
+                    <div class="card dashboard-mini-card">
+                        <span>Estoque em atenção</span>
+                        <strong id="dashboard-low-stock">0 itens</strong>
+                    </div>
+                    <div class="card dashboard-mini-card">
+                        <span>Receitas salvas</span>
+                        <strong id="dashboard-recipes-count">0</strong>
+                    </div>
+                </div>
+                <div class="card dashboard-next-card">
+                    <div>
+                        <span class="dashboard-label">Próximo melhor passo</span>
+                        <h3 id="dashboard-next-title">Monte sua bancada</h3>
+                        <p id="dashboard-next-copy">Cadastre um café, crie uma receita e registre a extração para o Coffee Lab começar a gerar histórico útil.</p>
+                    </div>
+                    <a id="dashboard-next-link" href="#/coffees" class="btn btn-secondary btn-auto">Continuar</a>
                 </div>
             </section>
 
@@ -342,7 +370,7 @@
                     </div>
                 </div>
 
-                <div class="toolbar">
+                <div class="toolbar recipe-toolbar">
                     <input type="text" id="recipe-search" placeholder="Buscar por nome, notas, moagem...">
                     <select id="filter-recipe-method">
                         <option value="">Todos os Métodos</option>
@@ -1031,6 +1059,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=18.1"></script>
+    <script src="/static/js/app.js?v=18.2"></script>
 </body>
 </html>

@@ -107,6 +107,8 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .topbar-actions { display: flex; align-items: center; gap: 8px; }
 .user-profile-btn { width: 36px; height: 36px; border-radius: 50%; overflow: hidden; display: block; border: 1px solid var(--border); cursor: pointer; }
 .user-profile-btn img { width: 100%; height: 100%; object-fit: cover; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-raised); color: var(--text); cursor: pointer; transition: background .15s, border-color .15s, color .15s, transform .15s; }
+.icon-btn:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 
 .notification-wrapper { position: relative; }
 .notification-btn { position: relative; width: 36px; height: 36px; }
@@ -231,6 +233,19 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
 .card { background: color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%); border: 1px solid color-mix(in srgb, var(--border) 82%, var(--accent) 18%); border-radius: var(--radius); padding: 24px; box-shadow: 0 14px 42px rgba(0,0,0,0.06); }
 .skeleton { background: var(--skeleton); background-size: 200% 100%; animation: skeleton 1.2s infinite linear; }
+.dashboard-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 28px; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border)); border-radius: var(--radius); background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, var(--surface-raised)), color-mix(in srgb, var(--accent-2) 10%, var(--surface-raised))); box-shadow: 0 22px 70px color-mix(in srgb, var(--accent) 16%, transparent); }
+.dashboard-hero h1 { margin: 6px 0 8px; font-size: clamp(32px, 5vw, 54px); line-height: 1; }
+.dashboard-hero p { margin: 0; color: var(--text-secondary); max-width: 620px; }
+.dashboard-kicker, .dashboard-label { color: var(--accent-3); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.dashboard-grid { display: grid; grid-template-columns: 1.4fr repeat(3, minmax(160px, 1fr)); gap: 16px; margin-top: 18px; }
+.dashboard-spotlight { min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(160deg, color-mix(in srgb, var(--accent-2) 15%, var(--surface-raised)), var(--surface-raised)); }
+.dashboard-spotlight strong { display: block; font-size: clamp(30px, 5vw, 48px); line-height: 1; margin: 18px 0 8px; }
+.dashboard-spotlight p, .dashboard-next-card p { margin: 0; color: var(--text-secondary); line-height: 1.45; }
+.dashboard-mini-card { min-height: 150px; display: flex; flex-direction: column; justify-content: space-between; }
+.dashboard-mini-card span { color: var(--text-secondary); font-size: 13px; font-weight: 700; }
+.dashboard-mini-card strong { font-size: 24px; line-height: 1.12; overflow-wrap: anywhere; }
+.dashboard-next-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 16px; }
+.dashboard-next-card h3 { margin: 6px 0 8px; font-size: 24px; }
 @keyframes skeleton { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -339,6 +354,9 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .toolbar input { flex: 2; min-width: 200px; background: var(--surface-raised); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); outline: none; }
 .toolbar select { background: var(--surface-raised); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); outline: none; cursor: pointer; }
 .toolbar .icon-btn.active { background: color-mix(in srgb, var(--accent) 20%, transparent); border-color: var(--accent); color: var(--accent); }
+.recipe-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(160px, 220px) 46px; align-items: center; }
+.recipe-toolbar input, .recipe-toolbar select { min-width: 0; width: 100%; }
+.recipe-toolbar .icon-btn { width: 46px; min-width: 46px; }
 
 /* Layout Grid dos Cafés */
 .coffee-grid-layout { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
@@ -453,6 +471,8 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .stock-table th, .stock-table td { padding: 14px 20px; border-bottom: 1px solid var(--border); }
 .stock-table th { background: var(--surface); font-weight: 600; color: var(--text-secondary); }
 .stock-table tbody tr:hover { background: color-mix(in srgb, var(--surface) 40%, transparent); }
+.stock-actions-cell { text-align: right; white-space: nowrap; }
+.stock-actions-cell .btn { margin: 3px 0 3px 6px; }
 
 /* Badges Customizados */
 .badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; }
@@ -1607,6 +1627,171 @@ html.coffee-lab-mobile table {
 html.coffee-lab-mobile .share-export-card {
   width: 100% !important;
   transform: none !important;
+}
+
+html.coffee-lab-mobile .dashboard-hero,
+html.coffee-lab-mobile .dashboard-next-card {
+  align-items: stretch !important;
+  flex-direction: column !important;
+}
+
+html.coffee-lab-mobile .dashboard-grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+html.coffee-lab-mobile .dashboard-spotlight,
+html.coffee-lab-mobile .dashboard-mini-card {
+  min-height: 128px !important;
+}
+
+html.coffee-lab-mobile .recipe-toolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(132px, .55fr) 52px !important;
+  gap: 10px !important;
+}
+
+html.coffee-lab-mobile .recipe-toolbar input {
+  grid-column: 1 / -1 !important;
+}
+
+html.coffee-lab-mobile .recipe-toolbar select,
+html.coffee-lab-mobile .recipe-toolbar .icon-btn {
+  min-height: 48px !important;
+}
+
+html.coffee-lab-mobile .stock-table,
+html.coffee-lab-mobile .stock-table tbody,
+html.coffee-lab-mobile .stock-table tr,
+html.coffee-lab-mobile .stock-table td {
+  display: block !important;
+  width: 100% !important;
+}
+
+html.coffee-lab-mobile .stock-table thead {
+  display: none !important;
+}
+
+html.coffee-lab-mobile .stock-table tr {
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface-raised) !important;
+  margin: 12px !important;
+  padding: 12px !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.12) !important;
+}
+
+html.coffee-lab-mobile .stock-table td {
+  display: grid !important;
+  grid-template-columns: minmax(110px, .42fr) minmax(0, 1fr) !important;
+  gap: 12px !important;
+  align-items: center !important;
+  padding: 10px 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  text-align: left !important;
+}
+
+html.coffee-lab-mobile .stock-table td:last-child {
+  border-bottom: 0 !important;
+}
+
+html.coffee-lab-mobile .stock-table td::before {
+  content: attr(data-label);
+  color: var(--text-secondary);
+  font-size: .85rem;
+  font-weight: 700;
+}
+
+html.coffee-lab-mobile .stock-actions-cell {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  white-space: normal !important;
+}
+
+html.coffee-lab-mobile .stock-actions-cell::before {
+  margin-bottom: 2px !important;
+}
+
+html.coffee-lab-mobile .stock-actions-cell .btn {
+  margin: 0 !important;
+}
+
+html.coffee-lab-mobile #view-ai {
+  height: calc(100dvh - 64px) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-wrapper {
+  position: relative !important;
+  height: calc(100dvh - 64px) !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+html.coffee-lab-mobile #view-ai .ai-sidebar {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  bottom: 0 !important;
+  width: min(86vw, 320px) !important;
+  max-width: 320px !important;
+  max-height: none !important;
+  z-index: 30 !important;
+  transform: translateX(-104%) !important;
+  transition: transform .22s ease !important;
+  border-right: 1px solid var(--border) !important;
+  border-bottom: 0 !important;
+  box-shadow: 18px 0 40px rgba(0,0,0,.32) !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-wrapper.ai-sidebar-open .ai-sidebar {
+  transform: translateX(0) !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-main {
+  width: 100% !important;
+  min-height: 0 !important;
+  height: 100% !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-header {
+  min-height: 64px !important;
+  height: auto !important;
+  padding: 10px 12px !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-header h1 {
+  font-size: 1.05rem !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-header p {
+  font-size: .78rem !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-messages {
+  flex: 1 !important;
+  min-height: 0 !important;
+  padding: 14px !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-messages > div {
+  max-width: 92% !important;
+  font-size: .95rem !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-form {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+  padding: 10px !important;
+}
+
+html.coffee-lab-mobile #view-ai .ai-chat-form input {
+  min-width: 0 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1356,6 +1356,68 @@ async function apiFetch(
             });
             }
 
+        async function fetchAndRenderDashboard() {
+            const currentView = location.hash.replace('#', '').replace('/', '') || 'dashboard';
+            if (!state.token || currentView !== 'dashboard') return;
+            try {
+                const [coffeesData, stockData, recipesData, extractionsData] = await Promise.all([
+                    apiFetch('/api/coffees').catch(() => []),
+                    apiFetch('/api/stock').catch(() => []),
+                    apiFetch('/api/recipes').catch(() => []),
+                    apiFetch('/api/extractions').catch(() => []),
+                ]);
+
+                const coffees = Array.isArray(coffeesData) ? coffeesData : [];
+                const stock = Array.isArray(stockData) ? stockData : [];
+                const recipes = Array.isArray(recipesData) ? recipesData : [];
+                const extractions = Array.isArray(extractionsData) ? extractionsData : [];
+                const todayKey = new Date().toISOString().slice(0, 10);
+                const todayExtractions = extractions.filter(ext => {
+                    const rawDate = ext.extraction_date || ext.created_at;
+                    return rawDate && new Date(rawDate).toISOString().slice(0, 10) === todayKey;
+                });
+                const lowStock = stock.filter(item => Number(item.current_quantity || 0) <= Number(item.min_quantity || 0));
+                const favoriteCoffee = coffees.find(c => c.is_favorite) || coffees[0];
+
+                const setText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value;
+                };
+                const setHref = (id, href) => {
+                    const el = document.getElementById(id);
+                    if (el) el.setAttribute('href', href);
+                };
+
+                setText('dashboard-main-metric', `${todayExtractions.length} preparo${todayExtractions.length === 1 ? '' : 's'} hoje`);
+                setText('dashboard-main-note', todayExtractions.length > 0
+                    ? 'Seu ritual ja entrou no historico. Avalie a xicara no Diario Sensorial.'
+                    : 'Comece por uma receita guiada e registre a extracao para acompanhar sua evolucao.');
+                setText('dashboard-fav-coffee', favoriteCoffee ? favoriteCoffee.name : 'Cadastre seu primeiro grao');
+                setText('dashboard-low-stock', `${lowStock.length} item${lowStock.length === 1 ? '' : 's'}`);
+                setText('dashboard-recipes-count', String(recipes.length));
+
+                if (lowStock.length > 0) {
+                    setText('dashboard-next-title', 'Revise o estoque antes do proximo preparo');
+                    setText('dashboard-next-copy', `${lowStock[0].coffee?.name || 'Um cafe'} esta perto do limite. Ajuste a quantidade ou registre uma compra.`);
+                    setHref('dashboard-next-link', '#/stock');
+                } else if (recipes.length > 0) {
+                    setText('dashboard-next-title', 'Prepare sua melhor receita salva');
+                    setText('dashboard-next-copy', 'Escolha uma receita, use o modo guiado e deixe o Coffee Lab registrar o resultado.');
+                    setHref('dashboard-next-link', '#/recipes');
+                } else if (coffees.length > 0) {
+                    setText('dashboard-next-title', 'Transforme seu grao em receita');
+                    setText('dashboard-next-copy', 'Voce ja tem cafe cadastrado. Agora crie uma receita para padronizar o preparo.');
+                    setHref('dashboard-next-link', '#/recipes');
+                } else {
+                    setText('dashboard-next-title', 'Comece pela biblioteca de cafes');
+                    setText('dashboard-next-copy', 'Cadastre seu primeiro grao para liberar estoque, receitas e estatisticas mais interessantes.');
+                    setHref('dashboard-next-link', '#/coffees');
+                }
+            } catch (err) {
+                console.warn('Dashboard indisponivel:', err);
+            }
+        }
+
         // --- FASE 3: GRÃOS ESPECIAIS ---
         async function fetchAndRenderCoffees() {
             if (!state.token || location.hash !== '#/coffees') return;
@@ -1599,12 +1661,12 @@ async function apiFetch(
 
             return `
                 <tr>
-                <td><b>${item.coffee.name}</b></td>
-                <td>${item.coffee.roastery}</td>
-                <td>${statusBadge}</td>
-                <td>${quantityBadge}</td>
-                <td>${item.min_quantity}g</td>
-                <td style="text-align: right;">
+                <td data-label="Grão"><b>${item.coffee.name}</b></td>
+                <td data-label="Torrefação">${item.coffee.roastery}</td>
+                <td data-label="Status">${statusBadge}</td>
+                <td data-label="Quantidade">${quantityBadge}</td>
+                <td data-label="Limite">${item.min_quantity}g</td>
+                <td data-label="Ações" class="stock-actions-cell">
                     <button class="btn btn-sm btn-secondary"
     onclick="window.stockActions.openRefill(${item.id})">+ Compra</button>
                     ${!item.is_opened ? `<button class="btn btn-sm btn-secondary"
@@ -2255,6 +2317,7 @@ async function apiFetch(
             const activeView = document.getElementById('view-' + name);
             if (activeView) activeView.classList.add('active');
 
+            if (name === 'dashboard') fetchAndRenderDashboard();
             if (name === 'coffees') fetchAndRenderCoffees();
             if (name === 'stock') fetchAndRenderStock();
             if (name === 'extractions') fetchAndRenderExtractions();
@@ -2819,10 +2882,20 @@ window.editBeverage = async (id) => {
     const newChatBtn = document.getElementById('ai-new-chat-btn');
     const toggleSidebarBtn = document.getElementById('ai-toggle-sidebar');
     const aiSidebar = document.getElementById('ai-sidebar');
+    const aiChatWrapper = document.querySelector('.ai-chat-wrapper');
+    const isAiMobileLayout = () =>
+        document.documentElement.classList.contains('coffee-lab-mobile') ||
+        window.matchMedia('(max-width: 820px)').matches ||
+        window.matchMedia('(pointer: coarse)').matches;
 
     // Toggle do Sidebar
     if (toggleSidebarBtn && aiSidebar) {
     toggleSidebarBtn.addEventListener('click', () => {
+        if (isAiMobileLayout()) {
+            aiSidebar.style.display = '';
+            aiChatWrapper?.classList.toggle('ai-sidebar-open');
+            return;
+        }
         aiSidebar.style.display = (aiSidebar.style.display === 'none') ? 'flex' : 'none';
     });
     }
@@ -3035,6 +3108,7 @@ window.editBeverage = async (id) => {
     async function selectAiSession(sessionId) {
     currentAiSessionId = sessionId;
     if (chatMessagesContainer) chatMessagesContainer.innerHTML = '';
+    if (isAiMobileLayout()) aiChatWrapper?.classList.remove('ai-sidebar-open');
 
     if (false && !navigator.onLine) {
         appendChatMessage('assistant', 'Barista IA indisponível offline.');
