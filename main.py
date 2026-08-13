@@ -367,7 +367,31 @@ async def delete_beverage(
 # ========================================================
 
 
-def clean_ai_response(response: str) -> str:
+def extract_openrouter_content(data: dict) -> str:
+    choices = data.get("choices") or []
+    if not choices:
+        return ""
+
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                text = part.get("text") or part.get("content") or ""
+                parts.append(str(text))
+            elif part:
+                parts.append(str(part))
+        return "\n".join(part for part in parts if part.strip()).strip()
+
+    return str(content or "").strip()
+
+
+def clean_ai_response(response: str | None) -> str:
+    if not response:
+        return ""
+
     # Remove negrito Markdown
     response = response.replace("**", "")
 
@@ -829,8 +853,14 @@ async def ai_chat_unified(
                 )
 
             data = response.json()
-            raw_reply = data["choices"][0]["message"]["content"]
+            raw_reply = extract_openrouter_content(data)
             reply = clean_ai_response(raw_reply)
+            if not reply:
+                print("OpenRouter retornou uma resposta vazia:", data)
+                raise HTTPException(
+                    status_code=502,
+                    detail="A IA retornou uma resposta vazia. Tente novamente em alguns segundos.",
+                )
 
             assistant_msg = AIChatMessage(
                 session_id=session.id, role="assistant", content=reply
