@@ -2952,7 +2952,18 @@ window.editBeverage = async (id) => {
             })
         });
 
-        if (!response.ok) throw new Error("Erro ao responder mensagem.");
+        if (!response.ok) {
+            let detail = "Erro ao responder mensagem.";
+            try {
+                const errorData = await response.json();
+                detail = errorData.detail || detail;
+            } catch {
+                detail = response.status >= 500
+                    ? "Barista IA indisponivel no servidor."
+                    : detail;
+            }
+            throw new Error(detail);
+        }
         const data = await response.json();
 
         if (data.session_id) {
@@ -2962,9 +2973,11 @@ window.editBeverage = async (id) => {
         appendChatMessage('assistant', data.response);
         await loadAiSessions(true);
         } catch (err) {
-        // Captura falha de conexão no fetch ou resposta com erro
-        appendChatMessage('assistant', 'Barista IA indisponível offline.');
-        console.warn("IA indisponível ou sem conexão:", err.message);
+        const message = navigator.onLine
+            ? (err.message || 'Barista IA indisponivel no momento.')
+            : 'Barista IA indisponivel offline.';
+        appendChatMessage('assistant', message);
+        console.warn("IA indisponivel:", err.message);
         }
     });
     }
