@@ -65,7 +65,7 @@ Instale as dependencias:
 pip install -r requirements.txt
 ```
 
-Crie um arquivo `.env` na raiz:
+Opcionalmente, crie um arquivo `.env` na raiz para usar NeonDB e recursos externos:
 
 ```env
 DATABASE_URL=postgresql+psycopg2://USER:PASSWORD@HOST/DBNAME?sslmode=require
@@ -76,7 +76,8 @@ APP_ENV=development
 
 Observacoes:
 
-- Use a connection string do NeonDB em `DATABASE_URL`.
+- Sem `.env`, o ambiente local usa SQLite em `coffee_lab_dev.db`.
+- Use a connection string do NeonDB em `DATABASE_URL` quando quiser testar com dados reais.
 - `OPENROUTER_API_KEY` e necessaria apenas para o Barista de IA.
 - Nunca use o valor padrao de `SECRET_KEY` em producao.
 
@@ -101,6 +102,18 @@ Acesse:
 
 ```text
 http://localhost:8000
+```
+
+Para testar no celular na mesma rede Wi-Fi:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
+
+Depois acesse pelo IP do computador, por exemplo:
+
+```text
+http://192.168.1.4:8000
 ```
 
 ## Deploy Gratuito
@@ -170,11 +183,26 @@ Antes de publicar:
 - Configure `SECRET_KEY` forte.
 - Restrinja CORS para os dominios reais.
 - Use NeonDB com SSL.
+- Configure `PUBLIC_BASE_URL` com a URL publica do app, por exemplo `https://coffee-lab.onrender.com`.
+- Configure SMTP para verificacao de e-mail e recuperacao de senha:
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_USERNAME`
+  - `SMTP_PASSWORD`
+  - `SMTP_FROM_EMAIL`
+  - `SMTP_FROM_NAME`
+- Configure `GOOGLE_CLIENT_ID` para ativar login com Google.
 - Configure migracoes Alembic reais para o schema atual.
 - Valide limites e tipos de upload de imagens.
 - Revise logs e tratamento de erros.
 - Teste PWA em Chrome desktop, Android e iOS/Safari.
 - Configure variaveis de ambiente no provedor de deploy.
+
+## Autenticacao e Seguranca
+
+O Coffee Lab possui validacao de senha forte, verificacao de e-mail por token, recuperacao de senha por link temporario, login com Google configuravel e limitacao simples de tentativas em rotas sensiveis.
+
+Em desenvolvimento, quando o SMTP nao estiver configurado e `APP_ENV=development`, a API retorna links de teste para verificacao/reset. Em producao, configure SMTP para que os links sejam enviados por e-mail.
 
 ## Monetizacao com Anuncios
 

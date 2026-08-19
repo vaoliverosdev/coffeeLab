@@ -2,17 +2,27 @@ from functools import lru_cache
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any
 import bcrypt
+import re
 from jose import jwt
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings
 from sqlalchemy import create_engine, String, Integer, Boolean, Text, Float, Date, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+psycopg2://user:pass@localhost/coffee_lab"
+    database_url: str = "sqlite:///./coffee_lab_dev.db"
     secret_key: str = "change-me-to-something-really-truly-secret"
     openrouter_api_key: Optional[str] = None
     app_env: str = "development"
+    public_base_url: str = "http://localhost:8000"
+    allowed_origins: str = "*"
+    google_client_id: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: int = 587
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: str = "Coffee Lab"
 
     class Config:
         env_file = ".env"
@@ -36,6 +46,12 @@ class User(Base):
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(510), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    email_verification_token_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    email_verification_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    password_reset_token_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    password_reset_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    google_sub: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
 
     coffees: Mapped[List["Coffee"]] = relationship("Coffee", back_populates="user", cascade="all, delete-orphan")
     recipes: Mapped[List["Recipe"]] = relationship("Recipe", back_populates="user", cascade="all, delete-orphan")
@@ -113,7 +129,14 @@ class Recipe(Base):
 
 
 # --- ENGINE CONFIG ---
-engine = create_engine(get_settings().database_url, pool_pre_ping=True, echo=get_settings().app_env == "development")
+engine_kwargs = {
+    "pool_pre_ping": True,
+    "echo": get_settings().app_env == "development",
+}
+if get_settings().database_url.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(get_settings().database_url, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -131,14 +154,64 @@ def create_access_token(data: dict, d: Optional[timedelta] = None) -> str:
     return jwt.encode(encode, get_settings().secret_key, algorithm=ALGORITHM)
 
 # --- SCHEMAS PYDANTIC EXISTENTES ---
-class UserCreate(BaseModel): email: EmailStr; password: str; name: str
+COMMON_PASSWORDS = {"12345", "123456", "12345678", "123456789", "password", "senha123", "abcde", "abcdef"}
+
+def validate_password_strength(password: str, email: str | None = None) -> str:
+    if len(password) < 8:
+        raise ValueError("A senha precisa ter pelo menos 8 caracteres.")
+    if password.lower() in COMMON_PASSWORDS:
+        raise ValueError("Escolha uma senha menos óbvia.")
+    if email and email.split("@")[0].lower() in password.lower():
+        raise ValueError("A senha não deve conter partes do seu e-mail.")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("A senha precisa ter pelo menos uma letra maiúscula.")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("A senha precisa ter pelo menos uma letra minúscula.")
+    if not re.search(r"\d", password):
+        raise ValueError("A senha precisa ter pelo menos um número.")
+    return password
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    name: str = Field(..., min_length=2, max_length=120)
+
+    @field_validator("password")
+    @classmethod
+    def password_is_strong(cls, value: str, info):
+        return validate_password_strength(value, info.data.get("email"))
+
 class UserLogin(BaseModel): email: EmailStr; password: str
 class UserResponse(BaseModel):
-    id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool
+    id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool; email_verified: bool
     class Config: from_attributes = True
 class Token(BaseModel): access_token: str; token_type: str; user: UserResponse
 class ProfileUpdate(BaseModel): name: Optional[str] = None; bio: Optional[str] = None
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_is_strong(cls, value: str):
+        return validate_password_strength(value)
+
 class PasswordRecoveryRequest(BaseModel): email: EmailStr
+class PasswordResetRequest(BaseModel):
+    token: str
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_is_strong(cls, value: str):
+        return validate_password_strength(value)
+
+class EmailVerificationRequest(BaseModel): token: str
+class GoogleLoginRequest(BaseModel): credential: str
+class AuthActionResponse(BaseModel):
+    detail: str
+    dev_verification_url: Optional[str] = None
+    dev_reset_url: Optional[str] = None
 
 class NotificationItem(BaseModel):
     id: str

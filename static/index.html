@@ -18,8 +18,9 @@
             if (coarsePointer || compactScreen) document.documentElement.classList.add("coffee-lab-mobile");
         })();
     </script>
-    <link rel="stylesheet" href="/static/css/style.css?v=18.3">
+    <link rel="stylesheet" href="/static/css/style.css?v=18.4">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head><body>
     
     <!-- CONTAINER DE NOTIFICAÇÕES TOAST (FASE 2) -->
@@ -56,9 +57,14 @@
                     <label for="login-password">Senha</label>
                     <input type="password" id="login-password" required placeholder="••••••••">
                 </div>
+                <div id="google-login-area" class="google-login-area hidden">
+                    <div id="google-login-button"></div>
+                    <div class="auth-divider"><span>ou</span></div>
+                </div>
                 <button type="submit" class="btn btn-primary">Entrar</button>
                 <p class="auth-switch">Não tem conta? <a href="#" id="go-to-register">Criar conta</a></p>
                 <p class="auth-switch"><a href="#" id="go-to-recover" style="font-size:12px; color:var(--text-secondary);">Esqueceu sua senha?</a></p>
+                <p class="auth-switch"><a href="#" id="go-to-resend-verification" style="font-size:12px; color:var(--text-secondary);">Reenviar verificação de e-mail</a></p>
             </form>
 
             <!-- Form de Registro -->
@@ -72,8 +78,9 @@
                     <input type="email" id="reg-email" placeholder="seu@email.com">
                 </div>
                 <div class="form-group">
-                    <label for="reg-password">Senha (mínimo 6 caracteres)</label>
+                    <label for="reg-password">Senha segura</label>
                     <input type="password" id="reg-password" placeholder="••••••••">
+                    <small id="reg-password-hint" class="password-hint">Use 8+ caracteres, maiúscula, minúscula e número.</small>
                 </div>
                 <button type="submit" class="btn btn-primary">Cadastrar</button>
                 <p class="auth-switch">Já tem uma conta? <a href="#" id="go-to-login">Fazer Login</a></p>
@@ -87,6 +94,30 @@
                 </div>
                 <button type="submit" class="btn btn-primary">Enviar link de recuperação</button>
                 <p class="auth-switch"><a href="#" id="back-to-login">Voltar para o Login</a></p>
+            </form>
+
+            <form id="resend-verification-form" class="auth-form hidden">
+                <div class="form-group">
+                    <label for="verify-email">E-mail da conta</label>
+                    <input type="email" id="verify-email" placeholder="seu@email.com">
+                </div>
+                <button type="submit" class="btn btn-primary">Reenviar verificação</button>
+                <p class="auth-switch"><a href="#" id="verify-back-to-login">Voltar para o Login</a></p>
+            </form>
+
+            <form id="reset-password-form" class="auth-form hidden">
+                <input type="hidden" id="reset-token">
+                <div class="form-group">
+                    <label for="reset-password">Nova senha segura</label>
+                    <input type="password" id="reset-password" placeholder="••••••••">
+                    <small id="reset-password-hint" class="password-hint">Use 8+ caracteres, maiúscula, minúscula e número.</small>
+                </div>
+                <div class="form-group">
+                    <label for="reset-password-confirm">Confirmar nova senha</label>
+                    <input type="password" id="reset-password-confirm" placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn btn-primary">Atualizar senha</button>
+                <p class="auth-switch"><a href="#" id="reset-back-to-login">Voltar para o Login</a></p>
             </form>
         </div>
     </div>
@@ -212,6 +243,33 @@
                             <textarea id="profile-bio" rows="4" placeholder="Fale um pouco sobre suas preferências por extração, métodos favoritos, etc..."></textarea>
                         </div>
                         <button type="submit" class="btn btn-primary">Salvar Perfil</button>
+                    </form>
+                </div>
+
+                <div class="card profile-card" style="margin-top: 20px;">
+                    <div class="view-header" style="margin-bottom: 16px;">
+                        <div>
+                            <h2 style="font-size:18px; margin:0;">Segurança da conta</h2>
+                            <p style="margin:4px 0 0;">Altere sua senha mantendo o acesso protegido.</p>
+                        </div>
+                    </div>
+                    <form id="profile-password-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="profile-current-password">Senha atual</label>
+                                <input type="password" id="profile-current-password" autocomplete="current-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-new-password">Nova senha segura</label>
+                                <input type="password" id="profile-new-password" autocomplete="new-password" required>
+                                <small id="profile-password-hint" class="password-hint">Use 8+ caracteres, maiúscula, minúscula e número.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-confirm-password">Confirmar nova senha</label>
+                                <input type="password" id="profile-confirm-password" autocomplete="new-password" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-secondary">Alterar senha</button>
                     </form>
                 </div>
 
@@ -1059,6 +1117,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=18.3"></script>
+    <script src="/static/js/app.js?v=18.4"></script>
 </body>
 </html>

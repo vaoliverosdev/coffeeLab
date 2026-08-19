@@ -104,6 +104,42 @@
             }, 3500);
         }
 
+        function formatApiDetail(detail) {
+            if (Array.isArray(detail)) {
+                return detail
+                    .map(item => item?.msg || item?.message || String(item))
+                    .join(' ');
+            }
+            if (detail && typeof detail === 'object') {
+                return detail.msg || detail.message || JSON.stringify(detail);
+            }
+            return detail;
+        }
+
+        function isStrongPassword(password, email = '') {
+            const emailUser = String(email || '').split('@')[0].toLowerCase();
+            return password.length >= 8 &&
+                /[A-Z]/.test(password) &&
+                /[a-z]/.test(password) &&
+                /\d/.test(password) &&
+                !['12345', '123456', '12345678', '123456789', 'password', 'senha123', 'abcde', 'abcdef'].includes(password.toLowerCase()) &&
+                (!emailUser || !password.toLowerCase().includes(emailUser));
+        }
+
+        function updatePasswordHint(inputId, hintId, emailId) {
+            const input = document.getElementById(inputId);
+            const hint = document.getElementById(hintId);
+            const email = document.getElementById(emailId)?.value || '';
+            if (!input || !hint) return true;
+            const valid = isStrongPassword(input.value, email);
+            hint.classList.toggle('valid', valid);
+            hint.classList.toggle('invalid', Boolean(input.value) && !valid);
+            hint.textContent = valid
+                ? 'Senha forte.'
+                : 'Use 8+ caracteres, maiúscula, minúscula e número.';
+            return valid;
+        }
+
         function isQueuedResponse(result) {
             return Boolean(result && result.offlineQueued);
         }
@@ -1122,7 +1158,7 @@ async function apiFetch(
                 .catch(() => ({}));
 
             throw new Error(
-                errData.detail ||
+                formatApiDetail(errData.detail) ||
                 "Erro na requisição."
             );
         }
@@ -2075,7 +2111,9 @@ async function apiFetch(
             const forms = {
                 login: document.getElementById('login-form'),
                 register: document.getElementById('register-form'),
-                recover: document.getElementById('recover-form')
+                recover: document.getElementById('recover-form'),
+                resend: document.getElementById('resend-verification-form'),
+                reset: document.getElementById('reset-password-form')
             };
             Object.entries(forms).forEach(([name, form]) => {
                 form?.classList.toggle('hidden', name !== target);
@@ -2085,8 +2123,84 @@ async function apiFetch(
                 subtitle.innerText = {
                     login: 'Entre na sua conta para acessar seus cafés e receitas',
                     register: 'Crie sua conta para começar seu laboratório de cafés',
-                    recover: 'Informe seu e-mail para receber instruções de recuperação'
+                    recover: 'Informe seu e-mail para receber instruções de recuperação',
+                    resend: 'Receba um novo link para confirmar seu e-mail',
+                    reset: 'Crie uma nova senha segura para sua conta'
                 }[target];
+            }
+        }
+
+        function getHashParams() {
+            const hash = window.location.hash || '';
+            const [, queryString = ''] = hash.split('?');
+            return new URLSearchParams(queryString);
+        }
+
+        async function handleAuthLinksFromUrl() {
+            const hash = window.location.hash || '';
+            const token = getHashParams().get('token');
+            if (hash.startsWith('#/reset-password') && token) {
+                document.getElementById('reset-token').value = token;
+                showAuthForm('reset');
+                return;
+            }
+            if (hash.startsWith('#/verify-email') && token) {
+                try {
+                    const result = await apiFetch('/api/auth/verify-email', {
+                        method: 'POST',
+                        body: { token }
+                    });
+                    showToast(result.detail || 'E-mail verificado!');
+                    history.replaceState(null, '', window.location.pathname);
+                    showAuthForm('login');
+                } catch (err) {
+                    showToast(err.message, 'error');
+                    showAuthForm('resend');
+                }
+            }
+        }
+
+        async function initGoogleLogin() {
+            const area = document.getElementById('google-login-area');
+            const button = document.getElementById('google-login-button');
+            if (!area || !button) return;
+
+            try {
+                const config = await apiFetch('/api/auth/config');
+                if (!config.google_client_id) return;
+
+                const render = () => {
+                    if (!window.google?.accounts?.id) {
+                        setTimeout(render, 250);
+                        return;
+                    }
+                    window.google.accounts.id.initialize({
+                        client_id: config.google_client_id,
+                        callback: async (response) => {
+                            try {
+                                const result = await apiFetch('/api/auth/google', {
+                                    method: 'POST',
+                                    body: { credential: response.credential }
+                                });
+                                saveSession(result.access_token, result.user);
+                                showToast('Login com Google realizado!');
+                            } catch (err) {
+                                showToast(err.message, 'error');
+                            }
+                        }
+                    });
+                    window.google.accounts.id.renderButton(button, {
+                        theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+                        size: 'large',
+                        width: 320,
+                        text: 'continue_with'
+                    });
+                    area.classList.remove('hidden');
+                };
+
+                render();
+            } catch (err) {
+                console.warn('Login com Google indisponível:', err);
             }
         }
 
@@ -2105,10 +2219,34 @@ async function apiFetch(
             showAuthForm('login');
         });
 
+        document.getElementById('verify-back-to-login')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            showAuthForm('login');
+        });
+
+        document.getElementById('reset-back-to-login')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            showAuthForm('login');
+        });
+
         document.getElementById('go-to-recover')?.addEventListener('click', (e) => {
             e.preventDefault();
             showAuthForm('recover');
         });
+
+        document.getElementById('go-to-resend-verification')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            showAuthForm('resend');
+        });
+
+        document.getElementById('reg-password')?.addEventListener('input', () =>
+            updatePasswordHint('reg-password', 'reg-password-hint', 'reg-email'));
+        document.getElementById('reg-email')?.addEventListener('input', () =>
+            updatePasswordHint('reg-password', 'reg-password-hint', 'reg-email'));
+        document.getElementById('reset-password')?.addEventListener('input', () =>
+            updatePasswordHint('reset-password', 'reset-password-hint'));
+        document.getElementById('profile-new-password')?.addEventListener('input', () =>
+            updatePasswordHint('profile-new-password', 'profile-password-hint'));
 
         document.getElementById('login-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -2132,17 +2270,21 @@ async function apiFetch(
             const email = document.getElementById('reg-email').value.trim();
             const password = document.getElementById('reg-password').value;
 
-            if (!name || !email || password.length < 6) {
-                showToast('Preencha nome, e-mail e uma senha com pelo menos 6 caracteres.', 'error');
+            if (!name || !email || !updatePasswordHint('reg-password', 'reg-password-hint', 'reg-email')) {
+                showToast('Preencha nome, e-mail e uma senha forte.', 'error');
                 return;
             }
 
             try {
-                await apiFetch('/api/auth/register', {
+                const result = await apiFetch('/api/auth/register', {
                     method: 'POST',
                     body: { name, email, password }
                 });
-                showToast('Conta criada! Agora faça login.');
+                showToast(result.detail || 'Conta criada. Verifique seu e-mail.');
+                if (result.dev_verification_url) {
+                    window.location.href = result.dev_verification_url;
+                    return;
+                }
                 showAuthForm('login');
                 document.getElementById('login-email').value = email;
             } catch (err) {
@@ -2164,6 +2306,64 @@ async function apiFetch(
                     body: { email }
                 });
                 showToast(result.detail || 'Se o e-mail existir, as instruções serão enviadas.');
+                if (result.dev_reset_url) {
+                    document.getElementById('reset-token').value = new URL(result.dev_reset_url).hash.split('token=')[1] || '';
+                    showAuthForm('reset');
+                    return;
+                }
+                showAuthForm('login');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+
+        document.getElementById('resend-verification-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('verify-email').value.trim();
+            if (!email) {
+                showToast('Informe o e-mail da conta.', 'error');
+                return;
+            }
+            try {
+                const result = await apiFetch('/api/auth/resend-verification', {
+                    method: 'POST',
+                    body: { email }
+                });
+                showToast(result.detail || 'Se houver pendência, enviaremos um novo link.');
+                if (result.dev_verification_url) {
+                    window.location.href = result.dev_verification_url;
+                    return;
+                }
+                showAuthForm('login');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+
+        document.getElementById('reset-password-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = document.getElementById('reset-token').value;
+            const password = document.getElementById('reset-password').value;
+            const confirm = document.getElementById('reset-password-confirm').value;
+            if (!token) {
+                showToast('Link de recuperação inválido.', 'error');
+                return;
+            }
+            if (!updatePasswordHint('reset-password', 'reset-password-hint')) {
+                showToast('Escolha uma senha mais segura.', 'error');
+                return;
+            }
+            if (password !== confirm) {
+                showToast('As senhas não conferem.', 'error');
+                return;
+            }
+            try {
+                const result = await apiFetch('/api/auth/reset-password', {
+                    method: 'POST',
+                    body: { token, password }
+                });
+                showToast(result.detail || 'Senha atualizada.');
+                history.replaceState(null, '', window.location.pathname);
                 showAuthForm('login');
             } catch (err) {
                 showToast(err.message, 'error');
@@ -2188,6 +2388,41 @@ async function apiFetch(
                 localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
                 updateUserDOM();
                 showToast('Perfil atualizado!');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+
+        document.getElementById('profile-password-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const currentPassword = document.getElementById('profile-current-password').value;
+            const newPassword = document.getElementById('profile-new-password').value;
+            const confirmPassword = document.getElementById('profile-confirm-password').value;
+
+            if (!navigator.onLine) {
+                showToast('Alteração de senha precisa de conexão com a internet.', 'error');
+                return;
+            }
+            if (!updatePasswordHint('profile-new-password', 'profile-password-hint')) {
+                showToast('Escolha uma nova senha mais segura.', 'error');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                showToast('As senhas não conferem.', 'error');
+                return;
+            }
+
+            try {
+                const result = await apiFetch('/api/auth/me/password', {
+                    method: 'PUT',
+                    body: {
+                        current_password: currentPassword,
+                        new_password: newPassword
+                    }
+                });
+                document.getElementById('profile-password-form').reset();
+                updatePasswordHint('profile-new-password', 'profile-password-hint');
+                showToast(result.detail || 'Senha alterada com sucesso.');
             } catch (err) {
                 showToast(err.message, 'error');
             }
@@ -4066,6 +4301,8 @@ window.editBeverage = async (id) => {
         window.addEventListener('hashchange', route);
         document.addEventListener('DOMContentLoaded', () => {
             checkAuthUI();
+            handleAuthLinksFromUrl();
+            initGoogleLogin();
             initNotificationSystem();
             initShareStoryEditor();
             const appShell = document.getElementById('app');
@@ -4105,6 +4342,8 @@ window.editBeverage = async (id) => {
                 appShell.classList.remove('mobile-sidebar-open');
                 appMenuToggle.setAttribute('aria-expanded', String(!isHidden));
             });
+
+            window.addEventListener('hashchange', handleAuthLinksFromUrl);
 
             window.addEventListener('resize', () => {
                 if (!appShell) return;

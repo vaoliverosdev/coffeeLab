@@ -1,11 +1,17 @@
 import os
 import shutil
+import hashlib
+import secrets
+import smtplib
+import ssl
+from email.message import EmailMessage
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Optional, List
 from datetime import date, datetime, timedelta
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Query, Header
+from sqlalchemy import inspect, text
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Query, Header, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +22,9 @@ from pydantic import BaseModel
 from core import (
     Base, engine, get_db, hash_password, verify_password, 
     create_access_token, User, UserCreate, UserLogin, 
-    UserResponse, Token, ProfileUpdate, PasswordRecoveryRequest, NotificationItem, ALGORITHM, get_settings,
+    UserResponse, Token, ProfileUpdate, PasswordChangeRequest, PasswordRecoveryRequest, PasswordResetRequest,
+    EmailVerificationRequest, GoogleLoginRequest, AuthActionResponse, NotificationItem,
+    ALGORITHM, get_settings,
     Coffee, CoffeeCreate, CoffeeUpdate, CoffeeResponse,
     Stock, StockUpdate, StockResponse, StockMovement,
     Recipe, RecipeCreate, RecipeUpdate, RecipeResponse, MotorCalculationRequest, MotorCalculationResponse,
@@ -29,10 +37,136 @@ import re
 
 AVATAR_DIR = Path(__file__).parent / "static" / "uploads" / "avatars"
 COFFEE_DIR = Path(__file__).parent / "static" / "uploads" / "coffees"
+AUTH_RATE_LIMIT: dict[str, list[datetime]] = {}
+
+def get_allowed_origins() -> list[str]:
+    value = get_settings().allowed_origins.strip()
+    if not value or value == "*":
+        return ["*"]
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
+
+def ensure_auth_columns() -> None:
+    if engine.dialect.name == "sqlite":
+        sqlite_columns = {
+            "email_verified": "BOOLEAN NOT NULL DEFAULT 0",
+            "email_verification_token_hash": "VARCHAR(128)",
+            "email_verification_expires_at": "TIMESTAMP",
+            "password_reset_token_hash": "VARCHAR(128)",
+            "password_reset_expires_at": "TIMESTAMP",
+            "google_sub": "VARCHAR(255)",
+        }
+        with engine.begin() as conn:
+            existing = {column["name"] for column in inspect(conn).get_columns("users")}
+            for column_name, column_sql in sqlite_columns.items():
+                if column_name not in existing:
+                    conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_sql}"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))
+            conn.execute(text(
+                "UPDATE users SET email_verified = 1 "
+                "WHERE email_verified = 0 AND email_verification_token_hash IS NULL"
+            ))
+        return
+
+    statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token_hash VARCHAR(128)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_expires_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash VARCHAR(128)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+        conn.execute(text(
+            "UPDATE users SET email_verified = TRUE "
+            "WHERE email_verified = FALSE AND email_verification_token_hash IS NULL"
+        ))
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+def create_secure_token() -> tuple[str, str]:
+    token = secrets.token_urlsafe(32)
+    return token, hash_token(token)
+
+def app_url(path_with_hash: str) -> str:
+    base_url = get_settings().public_base_url.rstrip("/")
+    return f"{base_url}/{path_with_hash.lstrip('/')}"
+
+def smtp_is_configured() -> bool:
+    settings = get_settings()
+    return all([
+        settings.smtp_host,
+        settings.smtp_username,
+        settings.smtp_password,
+        settings.smtp_from_email,
+    ])
+
+def send_email(to_email: str, subject: str, text_body: str) -> bool:
+    settings = get_settings()
+    if not smtp_is_configured():
+        print(f"[Auth] SMTP nao configurado. E-mail nao enviado para {to_email}.")
+        return False
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+    message["To"] = to_email
+    message.set_content(text_body)
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+        server.starttls(context=context)
+        server.login(settings.smtp_username, settings.smtp_password)
+        server.send_message(message)
+    return True
+
+def send_verification_email(user: User, token: str) -> bool:
+    verify_url = app_url(f"#/verify-email?token={token}")
+    return send_email(
+        user.email,
+        "Verifique seu e-mail no Coffee Lab",
+        (
+            f"Oi, {user.name}!\n\n"
+            "Clique no link abaixo para verificar seu e-mail no Coffee Lab:\n"
+            f"{verify_url}\n\n"
+            "Este link expira em 24 horas."
+        ),
+    )
+
+def send_password_reset_email(user: User, token: str) -> bool:
+    reset_url = app_url(f"#/reset-password?token={token}")
+    return send_email(
+        user.email,
+        "Recuperacao de senha do Coffee Lab",
+        (
+            f"Oi, {user.name}!\n\n"
+            "Clique no link abaixo para criar uma nova senha:\n"
+            f"{reset_url}\n\n"
+            "Este link expira em 1 hora. Se voce nao pediu isso, ignore este e-mail."
+        ),
+    )
+
+def check_auth_rate_limit(request: Request, scope: str, limit: int = 8, minutes: int = 15) -> None:
+    client_ip = request.client.host if request.client else "unknown"
+    key = f"{scope}:{client_ip}"
+    now = datetime.utcnow()
+    window_start = now - timedelta(minutes=minutes)
+    attempts = [attempt for attempt in AUTH_RATE_LIMIT.get(key, []) if attempt > window_start]
+    if len(attempts) >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail="Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+        )
+    attempts.append(now)
+    AUTH_RATE_LIMIT[key] = attempts
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    ensure_auth_columns()
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
     COFFEE_DIR.mkdir(parents=True, exist_ok=True)
     yield
@@ -41,8 +175,8 @@ app = FastAPI(title="Coffee Lab", version="0.5.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=get_allowed_origins(),
+    allow_credentials=get_allowed_origins() != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -68,28 +202,170 @@ def get_token_from_header(authorization: Optional[str] = Header(None)):
     return authorization.split(" ")[1]
 
 # --- ENDPOINTS DE AUTENTICAÇÃO ---
-@app.post("/api/auth/register", response_model=UserResponse)
-def register(user_in: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user_in.email).first(): 
+@app.get("/api/auth/config")
+def auth_config():
+    return {"google_client_id": get_settings().google_client_id}
+
+@app.post("/api/auth/register", response_model=AuthActionResponse)
+def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "register", limit=5, minutes=20)
+    normalized_email = user_in.email.lower()
+    if db.query(User).filter(User.email == normalized_email).first():
         raise HTTPException(status_code=400, detail="E-mail existente.")
-    u = User(email=user_in.email, hashed_password=hash_password(user_in.password), name=user_in.name)
-    db.add(u); db.commit(); db.refresh(u)
-    return u
+
+    token, token_hash = create_secure_token()
+    u = User(
+        email=normalized_email,
+        hashed_password=hash_password(user_in.password),
+        name=user_in.name.strip(),
+        email_verified=False,
+        email_verification_token_hash=token_hash,
+        email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
+    )
+    db.add(u)
+    db.commit()
+    db.refresh(u)
+
+    sent = send_verification_email(u, token)
+    response = {
+        "detail": "Conta criada. Verifique seu e-mail para liberar o acesso."
+        if sent
+        else "Conta criada. Configure o SMTP para enviar o e-mail de verificação.",
+    }
+    if get_settings().app_env == "development" and not sent:
+        response["dev_verification_url"] = app_url(f"#/verify-email?token={token}")
+    return response
 
 @app.post("/api/auth/login", response_model=Token)
-def login(credentials: UserLogin, db: Session = Depends(get_db)):
-    u = db.query(User).filter(User.email == credentials.email).first()
+def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "login", limit=10, minutes=15)
+    u = db.query(User).filter(User.email == credentials.email.lower()).first()
     if not u:
-        raise HTTPException(status_code=404, detail="Conta não encontrada para este e-mail.")
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
     if not verify_password(credentials.password, u.hashed_password):
-        raise HTTPException(status_code=401, detail="Senha incorreta.")
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+    if not u.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail="Verifique seu e-mail antes de entrar. Use o link enviado ou solicite um novo.",
+        )
     return {"access_token": create_access_token(data={"sub": u.email}), "token_type": "bearer", "user": u}
 
-@app.post("/api/auth/recover")
-def recover_password(req: PasswordRecoveryRequest, db: Session = Depends(get_db)):
-    # Resposta neutra para evitar enumeração de contas. O envio real de e-mail entra em fase posterior.
-    db.query(User).filter(User.email == req.email).first()
-    return {"detail": "Se este e-mail estiver cadastrado, as instruções de recuperação serão enviadas."}
+@app.post("/api/auth/resend-verification", response_model=AuthActionResponse)
+def resend_verification(req: PasswordRecoveryRequest, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "resend-verification", limit=5, minutes=20)
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    response = {"detail": "Se este e-mail estiver cadastrado e pendente, enviaremos um novo link."}
+    if not user or user.email_verified:
+        return response
+
+    token, token_hash = create_secure_token()
+    user.email_verification_token_hash = token_hash
+    user.email_verification_expires_at = datetime.utcnow() + timedelta(hours=24)
+    db.commit()
+
+    sent = send_verification_email(user, token)
+    if get_settings().app_env == "development" and not sent:
+        response["dev_verification_url"] = app_url(f"#/verify-email?token={token}")
+    return response
+
+@app.post("/api/auth/verify-email", response_model=AuthActionResponse)
+def verify_email(req: EmailVerificationRequest, db: Session = Depends(get_db)):
+    token_hash = hash_token(req.token)
+    user = db.query(User).filter(User.email_verification_token_hash == token_hash).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Link de verificação inválido.")
+    if user.email_verification_expires_at and user.email_verification_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Link de verificação expirado. Solicite um novo.")
+
+    user.email_verified = True
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    db.commit()
+    return {"detail": "E-mail verificado com sucesso. Agora você já pode entrar."}
+
+@app.post("/api/auth/recover", response_model=AuthActionResponse)
+def recover_password(req: PasswordRecoveryRequest, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "recover", limit=5, minutes=20)
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    response = {"detail": "Se este e-mail estiver cadastrado, as instruções de recuperação serão enviadas."}
+    if not user:
+        return response
+
+    token, token_hash = create_secure_token()
+    user.password_reset_token_hash = token_hash
+    user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+
+    sent = send_password_reset_email(user, token)
+    if get_settings().app_env == "development" and not sent:
+        response["dev_reset_url"] = app_url(f"#/reset-password?token={token}")
+    return response
+
+@app.post("/api/auth/reset-password", response_model=AuthActionResponse)
+def reset_password(req: PasswordResetRequest, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "reset-password", limit=8, minutes=20)
+    token_hash = hash_token(req.token)
+    user = db.query(User).filter(User.password_reset_token_hash == token_hash).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Link de recuperação inválido.")
+    if user.password_reset_expires_at and user.password_reset_expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Link de recuperação expirado. Solicite um novo.")
+
+    user.hashed_password = hash_password(req.password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    user.email_verified = True
+    db.commit()
+    return {"detail": "Senha atualizada com sucesso. Entre usando a nova senha."}
+
+@app.post("/api/auth/google", response_model=Token)
+async def google_login(req: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
+    check_auth_rate_limit(request, "google-login", limit=12, minutes=15)
+    settings = get_settings()
+    if not settings.google_client_id:
+        raise HTTPException(status_code=400, detail="Login com Google não configurado.")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": req.credential},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Credencial do Google inválida.")
+
+    profile = response.json()
+    if profile.get("aud") != settings.google_client_id:
+        raise HTTPException(status_code=401, detail="Credencial do Google não pertence a este app.")
+    if profile.get("email_verified") not in ("true", True):
+        raise HTTPException(status_code=401, detail="O Google não confirmou este e-mail.")
+
+    email = str(profile.get("email") or "").lower()
+    google_sub = str(profile.get("sub") or "")
+    name = str(profile.get("name") or email.split("@")[0] or "Barista")
+    avatar_url = profile.get("picture")
+    if not email or not google_sub:
+        raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
+
+    user = db.query(User).filter(or_(User.email == email, User.google_sub == google_sub)).first()
+    if not user:
+        user = User(
+            email=email,
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+            name=name,
+            avatar_url=avatar_url,
+            email_verified=True,
+            google_sub=google_sub,
+        )
+        db.add(user)
+    else:
+        user.email_verified = True
+        user.google_sub = google_sub
+        if avatar_url and not user.avatar_url:
+            user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(user)
+    return {"access_token": create_access_token(data={"sub": user.email}), "token_type": "bearer", "user": user}
 
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_me(authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
@@ -102,6 +378,24 @@ async def update_profile(profile_data: ProfileUpdate, authorization: Annotated[s
     if profile_data.bio is not None: u.bio = profile_data.bio
     db.commit(); db.refresh(u)
     return u
+
+@app.put("/api/auth/me/password", response_model=AuthActionResponse)
+async def change_password(
+    req: PasswordChangeRequest,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    u = await get_current_user(db, token=authorization)
+    if not verify_password(req.current_password, u.hashed_password):
+        raise HTTPException(status_code=401, detail="Senha atual incorreta.")
+    if verify_password(req.new_password, u.hashed_password):
+        raise HTTPException(status_code=400, detail="A nova senha precisa ser diferente da senha atual.")
+
+    u.hashed_password = hash_password(req.new_password)
+    u.password_reset_token_hash = None
+    u.password_reset_expires_at = None
+    db.commit()
+    return {"detail": "Senha alterada com sucesso."}
 
 @app.post("/api/auth/me/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
