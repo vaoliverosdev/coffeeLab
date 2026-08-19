@@ -131,7 +131,7 @@ class Recipe(Base):
 # --- ENGINE CONFIG ---
 engine_kwargs = {
     "pool_pre_ping": True,
-    "echo": get_settings().app_env == "development",
+    "echo": get_settings().app_env == "debug",
 }
 if get_settings().database_url.startswith("sqlite"):
     engine_kwargs["connect_args"] = {"check_same_thread": False}

@@ -1,9 +1,8 @@
-import os
-import shutil
 import hashlib
 import secrets
 import smtplib
 import ssl
+from io import BytesIO
 from email.message import EmailMessage
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -15,6 +14,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Q
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image, UnidentifiedImageError
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import or_, desc
@@ -32,12 +32,14 @@ from core import (
     SensoryUserProfileResponse, Beverage, BeverageCreate, BeverageResponse, 
 )
 import httpx
-import traceback
 import re
 
 AVATAR_DIR = Path(__file__).parent / "static" / "uploads" / "avatars"
 COFFEE_DIR = Path(__file__).parent / "static" / "uploads" / "coffees"
 AUTH_RATE_LIMIT: dict[str, list[datetime]] = {}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_IMAGE_PIXELS = 16_000_000
+ALLOWED_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 
 def get_allowed_origins() -> list[str]:
     value = get_settings().allowed_origins.strip()
@@ -163,6 +165,31 @@ def check_auth_rate_limit(request: Request, scope: str, limit: int = 8, minutes:
     attempts.append(now)
     AUTH_RATE_LIMIT[key] = attempts
 
+async def read_valid_image_upload(file: UploadFile) -> tuple[bytes, str]:
+    if file.content_type and file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Envie uma imagem JPG, PNG ou WebP.")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Envie uma imagem válida.")
+    if len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Imagem muito grande. O limite é 5 MB.")
+
+    try:
+        with Image.open(BytesIO(content)) as image:
+            image.verify()
+            image_format = image.format
+            width, height = image.size
+    except (UnidentifiedImageError, OSError):
+        raise HTTPException(status_code=400, detail="Arquivo de imagem inválido.")
+
+    if image_format not in ALLOWED_IMAGE_FORMATS:
+        raise HTTPException(status_code=400, detail="Formato de imagem não suportado.")
+    if width * height > MAX_IMAGE_PIXELS:
+        raise HTTPException(status_code=400, detail="Imagem muito grande em resolução.")
+
+    return content, ALLOWED_IMAGE_FORMATS[image_format]
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
@@ -180,6 +207,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
+    if request.url.scheme == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 async def get_current_user(db: Session = Depends(get_db), token: str = None):
     if not token:
@@ -400,11 +439,10 @@ async def change_password(
 @app.post("/api/auth/me/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
-    if file.content_type and not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Envie um arquivo de imagem válido.")
-    ext = os.path.splitext(file.filename)[1]
+    image_bytes, ext = await read_valid_image_upload(file)
     filename = f"user_{u.id}_{int(datetime.utcnow().timestamp())}{ext}"
-    with open(AVATAR_DIR / filename, "wb") as b: shutil.copyfileobj(file.file, b)
+    with open(AVATAR_DIR / filename, "wb") as b:
+        b.write(image_bytes)
     u.avatar_url = f"/static/uploads/avatars/{filename}"
     db.commit()
     return {"avatar_url": u.avatar_url}
@@ -465,9 +503,10 @@ async def upload_coffee_photo(coffee_id: int, file: UploadFile = File(...), auth
     u = await get_current_user(db, token=authorization)
     c = db.query(Coffee).filter(Coffee.id == coffee_id, Coffee.user_id == u.id).first()
     if not c: raise HTTPException(status_code=404, detail="Café não encontrado")
-    ext = os.path.splitext(file.filename)[1]
-    filename = f"coffee_{c.id}_{int(os.path.getmtime(Path(__file__).parent))}{ext}"
-    with open(COFFEE_DIR / filename, "wb") as b: shutil.copyfileobj(file.file, b)
+    image_bytes, ext = await read_valid_image_upload(file)
+    filename = f"coffee_{c.id}_{int(datetime.utcnow().timestamp())}{ext}"
+    with open(COFFEE_DIR / filename, "wb") as b:
+        b.write(image_bytes)
     c.photo_url = f"/static/uploads/coffees/{filename}"
     db.commit()
     return {"photo_url": c.photo_url}
@@ -1136,21 +1175,17 @@ async def ai_chat_unified(
             )
 
             if response.status_code != 200:
-                print(
-                    "❌ RESPOSTA OPENROUTER:",
-                    response.status_code,
-                    response.text,
-                )
+                print("OpenRouter error:", response.status_code, response.text[:500])
                 raise HTTPException(
-                    status_code=500,
-                    detail=f"Erro OpenRouter ({response.status_code}): {response.text}",
+                    status_code=502,
+                    detail="O Barista de IA não conseguiu responder agora. Tente novamente em alguns segundos.",
                 )
 
             data = response.json()
             raw_reply = extract_openrouter_content(data)
             reply = clean_ai_response(raw_reply)
             if not reply:
-                print("OpenRouter retornou uma resposta vazia:", data)
+                print("OpenRouter retornou uma resposta vazia.")
                 raise HTTPException(
                     status_code=502,
                     detail="A IA retornou uma resposta vazia. Tente novamente em alguns segundos.",
@@ -1167,18 +1202,13 @@ async def ai_chat_unified(
     except HTTPException as http_exc:
         raise http_exc
 
-    except Exception as e:
-        print("\n🔥 --- ERRO DETECTADO NO PYTHON --- 🔥")
-        traceback.print_exc()
-        print("---------------------------------------\n")
+    except Exception as error:
+        print("Erro interno no Barista de IA:", repr(error))
         raise HTTPException(
-            status_code=500, detail=f"Erro interno no servidor: {str(e)}"
+            status_code=500,
+            detail="Erro interno ao consultar o Barista de IA.",
         )
         
-# --- SERVINDO FRONTEND ---
-static_path = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
-
 # --- ENDPOINT DE HISTÓRICO DE EXTRAÇÃO (FASE 8) ---
 @app.get("/api/extractions", response_model=List[ExtractionResponse])
 async def get_extractions(

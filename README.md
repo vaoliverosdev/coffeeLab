@@ -129,6 +129,10 @@ Fluxo recomendado:
    - `DATABASE_URL`
    - `OPENROUTER_API_KEY`, se quiser usar o Barista de IA
    - `SECRET_KEY`, se preferir definir manualmente
+   - `PUBLIC_BASE_URL`, com a URL publica do Render
+   - `ALLOWED_ORIGINS`, com a mesma origem publica do app
+   - variaveis SMTP, se quiser verificacao de e-mail e recuperacao de senha em producao
+   - `GOOGLE_CLIENT_ID`, se quiser ativar login com Google
 5. O Render executara:
 
 ```bash
@@ -193,16 +197,18 @@ Antes de publicar:
   - `SMTP_FROM_NAME`
 - Configure `GOOGLE_CLIENT_ID` para ativar login com Google.
 - Configure migracoes Alembic reais para o schema atual.
-- Valide limites e tipos de upload de imagens.
-- Revise logs e tratamento de erros.
+- Uploads de imagem ja possuem limite de tamanho, formato e resolucao.
+- O backend envia headers basicos de seguranca e evita expor detalhes internos em erros da IA.
 - Teste PWA em Chrome desktop, Android e iOS/Safari.
 - Configure variaveis de ambiente no provedor de deploy.
 
 ## Autenticacao e Seguranca
 
-O Coffee Lab possui validacao de senha forte, verificacao de e-mail por token, recuperacao de senha por link temporario, login com Google configuravel e limitacao simples de tentativas em rotas sensiveis.
+O Coffee Lab possui validacao de senha forte, verificacao de e-mail por token, recuperacao de senha por link temporario, troca de senha no perfil, login com Google configuravel e limitacao simples de tentativas em rotas sensiveis.
 
 Em desenvolvimento, quando o SMTP nao estiver configurado e `APP_ENV=development`, a API retorna links de teste para verificacao/reset. Em producao, configure SMTP para que os links sejam enviados por e-mail.
+
+Uploads de avatar e foto de cafe aceitam JPG, PNG e WebP ate 5 MB e 16 megapixels. Arquivos invalidos sao rejeitados antes de serem salvos.
 
 ## Monetizacao com Anuncios
 
