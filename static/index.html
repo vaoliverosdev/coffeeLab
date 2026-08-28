@@ -40,6 +40,16 @@
 
     <!-- TELA DE AUTENTICAÇÃO (SÓ EXIBIDA SE DESLOGADO) -->
     <div id="auth-screen" class="auth-wrapper hidden">
+        <section class="public-landing-panel">
+            <span class="dashboard-kicker">Coffee Lab Social</span>
+            <h1>Seu diário, sua bancada e sua comunidade de cafés especiais.</h1>
+            <p>Registre cafés, compartilhe receitas, acompanhe seu paladar e descubra o que outros baristas caseiros estão preparando.</p>
+            <div id="public-landing-stats" class="landing-stat-grid">
+                <span><strong>0</strong> baristas</span>
+                <span><strong>0</strong> cafés</span>
+                <span><strong>0</strong> receitas</span>
+            </div>
+        </section>
         <div class="auth-card">
             <div class="auth-header">
                 <span class="logo-icon">&#9749;</span>
@@ -59,7 +69,7 @@
                 </div>
                 <div id="google-login-area" class="google-login-area hidden">
                     <div id="google-login-button"></div>
-                    <div class="auth-divider"><span>ou</span></div>
+                    <div class="auth-divider"><span>ou continue com e-mail</span></div>
                 </div>
                 <button type="submit" class="btn btn-primary">Entrar</button>
                 <p class="auth-switch">Não tem conta? <a href="#" id="go-to-register">Criar conta</a></p>
@@ -69,6 +79,10 @@
 
             <!-- Form de Registro -->
             <form id="register-form" class="auth-form hidden">
+                <div id="google-register-area" class="google-login-area hidden">
+                    <div id="google-register-button"></div>
+                    <div class="auth-divider"><span>ou crie com e-mail</span></div>
+                </div>
                 <div class="form-group">
                     <label for="reg-name">Nome Completo</label>
                     <input type="text" id="reg-name" placeholder="Como te chamamos?">
@@ -85,6 +99,15 @@
                 <button type="submit" class="btn btn-primary">Cadastrar</button>
                 <p class="auth-switch">Já tem uma conta? <a href="#" id="go-to-login">Fazer Login</a></p>
             </form>
+
+            <div id="post-register-panel" class="auth-form auth-success-panel hidden">
+                <div class="auth-success-icon">&#9993;</div>
+                <h3>Verifique seu e-mail</h3>
+                <p id="post-register-copy">Enviamos um link de confirmação para liberar sua conta no Coffee Lab.</p>
+                <button id="post-register-resend" type="button" class="btn btn-secondary">Reenviar e-mail</button>
+                <a id="post-register-dev-link" class="btn btn-primary hidden" href="#">Abrir link de teste</a>
+                <p class="auth-switch"><a href="#" id="post-register-back-login">Voltar para o Login</a></p>
+            </div>
 
             <!-- Form de Recuperação -->
             <form id="recover-form" class="auth-form hidden">
@@ -168,9 +191,15 @@
                 <a href="#/beverages" class="nav-link" data-view="beverages">Caderno de Bebidas</a>
                 <a href="#/ai" class="nav-link" data-view="ai">Barista de IA</a>
                 <a href="#/stats" class="nav-link" data-view="stats">Estatísticas</a>
+                <a href="#/feed" class="nav-link" data-view="feed">Feed</a>
+                <a href="#/explore" class="nav-link" data-view="explore">Explorar</a>
+                <a href="#/trends" class="nav-link" data-view="trends">Tendências</a>
+                <a href="#/social" class="nav-link" data-view="social">Comunidade</a>
+                <a href="#/onboarding" class="nav-link" data-view="onboarding">Começar bem</a>
                 <a href="#/explorer" class="nav-link" data-view="explorer">Explorador Sensorial</a>
                 <hr style="border: 0; border-top: 1px solid var(--border); margin: 12px 0; width: 100%;">
                 <a href="#/profile" class="nav-link" data-view="profile">Meu Perfil</a>
+                <a href="#/privacy" class="nav-link" data-view="privacy">Privacidade</a>
                 <a href="#" id="logout-btn" class="nav-link" style="color: #ff4d4d;">Sair</a>
             </nav>
         </aside>
@@ -213,6 +242,58 @@
                     </div>
                     <a id="dashboard-next-link" href="#/coffees" class="btn btn-secondary btn-auto">Continuar</a>
                 </div>
+                <div class="dashboard-experience-grid">
+                    <div class="card dashboard-feature-card">
+                        <span class="dashboard-label">Café do dia</span>
+                        <h3 id="dashboard-coffee-day">Escolha seu primeiro grão</h3>
+                        <p id="dashboard-coffee-day-copy">Seu destaque aparece aqui quando a biblioteca ganhar cafés.</p>
+                    </div>
+                    <div class="card dashboard-feature-card">
+                        <span class="dashboard-label">Progresso da semana</span>
+                        <h3 id="dashboard-week-progress">0 preparos</h3>
+                        <div class="dashboard-progress-track"><span id="dashboard-week-progress-bar"></span></div>
+                        <p id="dashboard-week-progress-copy">Meta sugerida: 5 preparos registrados.</p>
+                    </div>
+                    <div class="card dashboard-feature-card">
+                        <span class="dashboard-label">Última degustação</span>
+                        <h3 id="dashboard-last-sensory">Sem degustações ainda</h3>
+                        <p id="dashboard-last-sensory-copy">Avalie aroma, corpo, acidez e doçura para acompanhar sua evolução.</p>
+                    </div>
+                    <div class="card dashboard-feature-card">
+                        <span class="dashboard-label">Atividade social</span>
+                        <h3 id="dashboard-social-title">Perfil pronto para compartilhar</h3>
+                        <p id="dashboard-social-copy">Ative seu perfil público para preparar a futura comunidade Coffee Lab.</p>
+                    </div>
+                </div>
+                <div class="card dashboard-onboarding-card">
+                    <div>
+                        <span class="dashboard-label">Primeira jornada</span>
+                        <h3>Do grão à degustação</h3>
+                        <p>Complete os passos essenciais para transformar o Coffee Lab no seu diário vivo de cafés especiais.</p>
+                    </div>
+                    <div class="onboarding-steps" id="dashboard-onboarding-steps">
+                        <a href="#/coffees" class="onboarding-step" data-step="coffee">
+                            <span>1</span>
+                            <strong>Cadastre seu primeiro café</strong>
+                        </a>
+                        <a href="#/stock" class="onboarding-step" data-step="stock">
+                            <span>2</span>
+                            <strong>Adicione quantidade em estoque</strong>
+                        </a>
+                        <a href="#/recipes" class="onboarding-step" data-step="recipe">
+                            <span>3</span>
+                            <strong>Crie ou escolha uma receita</strong>
+                        </a>
+                        <a href="#/recipes" class="onboarding-step" data-step="extraction">
+                            <span>4</span>
+                            <strong>Registre sua primeira extração</strong>
+                        </a>
+                        <a href="#/sensory" class="onboarding-step" data-step="sensory">
+                            <span>5</span>
+                            <strong>Avalie sensorialmente</strong>
+                        </a>
+                    </div>
+                </div>
             </section>
 
             <!-- VIEW: MEU PERFIL (FASE 1) -->
@@ -234,14 +315,79 @@
                     </div>
                     
                     <form id="profile-form" style="margin-top: 24px;">
-                        <div class="form-group">
-                            <label for="profile-name">Nome Exibido</label>
-                            <input type="text" id="profile-name" required>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="profile-name">Nome de exibição</label>
+                                <input type="text" id="profile-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-username">Username único</label>
+                                <input type="text" id="profile-username" placeholder="seu.nome">
+                                <small class="password-hint">3 a 30 caracteres: letras, números, ponto ou underline.</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-city">Cidade</label>
+                                <input type="text" id="profile-city" placeholder="Ex: São Paulo">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-country">País</label>
+                                <input type="text" id="profile-country" placeholder="Ex: Brasil">
+                            </div>
                         </div>
                         <div class="form-group">
                             <label for="profile-bio">Sua Biografia / Notas de Barista</label>
                             <textarea id="profile-bio" rows="4" placeholder="Fale um pouco sobre suas preferências por extração, métodos favoritos, etc..."></textarea>
                         </div>
+                        <div class="profile-preferences-grid">
+                            <div class="form-group">
+                                <label for="profile-favorite-methods">Métodos favoritos</label>
+                                <input type="text" id="profile-favorite-methods" placeholder="V60, Aeropress, Espresso">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-favorite-roasteries">Torrefações favoritas</label>
+                                <input type="text" id="profile-favorite-roasteries" placeholder="Ex: Five Roasters, Coffee Lab">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-sensory-preferences">Preferências sensoriais</label>
+                                <input type="text" id="profile-sensory-preferences" placeholder="Frutado, doce, floral, chocolate">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-mastered-methods">Métodos dominados</label>
+                                <input type="text" id="profile-mastered-methods" placeholder="V60, Espresso, Clever">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-diary-visibility">Diário de degustação</label>
+                                <select id="profile-diary-visibility">
+                                    <option value="private">Privado</option>
+                                    <option value="public">Público</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="barista-setup-grid">
+                            <div class="form-group">
+                                <label for="profile-setup-grinder">Moedor</label>
+                                <input type="text" id="profile-setup-grinder" placeholder="Ex: Timemore C3">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-setup-kettle">Chaleira</label>
+                                <input type="text" id="profile-setup-kettle" placeholder="Ex: pescoço de ganso">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-setup-scale">Balança</label>
+                                <input type="text" id="profile-setup-scale" placeholder="Ex: com timer">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-setup-brewers">Setup de métodos</label>
+                                <input type="text" id="profile-setup-brewers" placeholder="V60, Aeropress, Prensa">
+                            </div>
+                        </div>
+                        <label class="profile-visibility-toggle">
+                            <input type="checkbox" id="profile-public-toggle">
+                            <span>
+                                <strong>Perfil público</strong>
+                                <small>Permite compartilhar seu perfil e estatísticas básicas com outros amantes de café.</small>
+                            </span>
+                        </label>
                         <button type="submit" class="btn btn-primary">Salvar Perfil</button>
                     </form>
                 </div>
@@ -250,14 +396,26 @@
                     <div class="view-header" style="margin-bottom: 16px;">
                         <div>
                             <h2 style="font-size:18px; margin:0;">Segurança da conta</h2>
-                            <p style="margin:4px 0 0;">Altere sua senha mantendo o acesso protegido.</p>
+                            <p id="profile-password-copy" style="margin:4px 0 0;">Altere sua senha mantendo o acesso protegido.</p>
+                        </div>
+                    </div>
+                    <div class="account-provider-panel">
+                        <div>
+                            <strong>Google</strong>
+                            <p id="profile-google-status">Verificando conexão...</p>
+                        </div>
+                        <div class="account-provider-actions">
+                            <div id="google-profile-area" class="google-profile-area hidden">
+                                <div id="google-profile-button"></div>
+                            </div>
+                            <button id="disconnect-google-btn" type="button" class="btn btn-secondary btn-auto hidden">Desconectar Google</button>
                         </div>
                     </div>
                     <form id="profile-password-form">
                         <div class="form-grid">
-                            <div class="form-group">
+                            <div class="form-group" id="profile-current-password-group">
                                 <label for="profile-current-password">Senha atual</label>
-                                <input type="password" id="profile-current-password" autocomplete="current-password" required>
+                                <input type="password" id="profile-current-password" autocomplete="current-password">
                             </div>
                             <div class="form-group">
                                 <label for="profile-new-password">Nova senha segura</label>
@@ -635,6 +793,18 @@
         </div>
       </div>
 
+      <div class="ai-context-notice">
+        <strong>Contexto privado</strong>
+        <span>Quando você pergunta, a IA usa seus cafés, receitas, estoque, extrações e preferências sensoriais para responder melhor.</span>
+      </div>
+
+      <div class="ai-suggestion-grid">
+        <button type="button" data-ai-suggestion="Qual café devo preparar hoje?">Qual café devo preparar hoje?</button>
+        <button type="button" data-ai-suggestion="Como ajustar minha receita?">Como ajustar minha receita?</button>
+        <button type="button" data-ai-suggestion="O que comprar baseado no meu paladar?">O que comprar baseado no meu paladar?</button>
+        <button type="button" data-ai-suggestion="Qual método combina com esse café?">Qual método combina com esse café?</button>
+      </div>
+
       <!-- 2. CONTAINER DAS MENSAGENS (Scroll vertical) -->
       <div id="ai-chat-messages" class="ai-chat-messages">
         <!-- Balões de mensagem renderizados via JS -->
@@ -735,6 +905,183 @@
     </div>
   </div>
 </section>
+
+            <!-- VIEW: FEED -->
+            <section id="view-feed" class="view">
+                <div class="social-hero">
+                    <div>
+                        <span class="dashboard-kicker">Feed Coffee Lab</span>
+                        <h1>O que a comunidade está preparando</h1>
+                        <p>Atividades públicas, cafés provados, receitas compartilhadas e descobertas sensoriais em tempo real.</p>
+                    </div>
+                    <a href="#/social" class="btn btn-primary btn-auto">Publicar agora</a>
+                </div>
+                <div id="feed-page-list" class="social-feed-list"></div>
+            </section>
+
+            <!-- VIEW: EXPLORAR -->
+            <section id="view-explore" class="view">
+                <div class="social-hero explore-hero">
+                    <div>
+                        <span class="dashboard-kicker">Explorar cafés especiais</span>
+                        <h1>Descubra cafés, torrefações, origens e métodos</h1>
+                        <p>Uma camada social pensada para café: quero provar, provado, métodos dominados, torrefações exploradas e receitas salvas.</p>
+                    </div>
+                    <a href="#/trends" class="btn btn-secondary btn-auto">Ver tendências</a>
+                </div>
+                <div class="explore-grid" id="explore-grid"></div>
+                <div class="public-detail-grid">
+                    <form id="public-profile-lookup" class="card social-panel">
+                        <h3>Perfil público</h3>
+                        <input id="public-profile-username" type="text" placeholder="username">
+                        <button type="submit" class="btn btn-secondary btn-auto">Ver perfil</button>
+                    </form>
+                    <form id="public-coffee-lookup" class="card social-panel">
+                        <h3>Página pública de café</h3>
+                        <input id="public-coffee-id" type="number" min="1" placeholder="ID do café">
+                        <button type="submit" class="btn btn-secondary btn-auto">Abrir café</button>
+                    </form>
+                    <form id="public-roastery-lookup" class="card social-panel">
+                        <h3>Página de torrefação</h3>
+                        <input id="public-roastery-name" type="text" placeholder="Nome da torrefação">
+                        <button type="submit" class="btn btn-secondary btn-auto">Explorar torrefação</button>
+                    </form>
+                    <form id="public-method-lookup" class="card social-panel">
+                        <h3>Página de método</h3>
+                        <input id="public-method-name" type="text" placeholder="V60, Aeropress, Espresso">
+                        <button type="submit" class="btn btn-secondary btn-auto">Explorar método</button>
+                    </form>
+                </div>
+                <div id="public-detail-result" class="public-detail-result"></div>
+            </section>
+
+            <!-- VIEW: TENDÊNCIAS -->
+            <section id="view-trends" class="view">
+                <div class="social-hero">
+                    <div>
+                        <span class="dashboard-kicker">Rankings leves</span>
+                        <h1>Tendências da bancada</h1>
+                        <p>Cafés mais provados, receitas mais salvas, métodos mais usados e baristas ativos da semana.</p>
+                    </div>
+                </div>
+                <div id="trends-grid" class="explore-grid"></div>
+            </section>
+
+            <!-- VIEW: COMEÇAR BEM -->
+            <section id="view-onboarding" class="view">
+                <div class="social-hero">
+                    <div>
+                        <span class="dashboard-kicker">Onboarding guiado</span>
+                        <h1>Do primeiro grão ao seu paladar</h1>
+                        <p>Um caminho simples para transformar o Coffee Lab em diário, estoque, laboratório e perfil social.</p>
+                    </div>
+                    <span id="onboarding-progress-pill" class="progress-pill">0%</span>
+                </div>
+                <div id="onboarding-page-steps" class="onboarding-page-grid"></div>
+            </section>
+
+            <!-- VIEW: PRIVACIDADE -->
+            <section id="view-privacy" class="view">
+                <div class="social-hero">
+                    <div>
+                        <span class="dashboard-kicker">Privacidade</span>
+                        <h1>Controle o que vira comunidade</h1>
+                        <p>Escolha se seu perfil e seu diário sensorial ficam privados ou públicos.</p>
+                    </div>
+                </div>
+                <form id="privacy-form" class="card privacy-card">
+                    <div class="form-group">
+                        <label for="privacy-profile">Perfil público</label>
+                        <select id="privacy-profile">
+                            <option value="private">Privado</option>
+                            <option value="public">Público</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="privacy-diary">Diário de degustação</label>
+                        <select id="privacy-diary">
+                            <option value="private">Privado</option>
+                            <option value="public">Público</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-auto">Salvar privacidade</button>
+                </form>
+            </section>
+
+            <!-- VIEW: COMUNIDADE (REDE SOCIAL DE CAFÉS) -->
+            <section id="view-social" class="view">
+                <div class="social-hero">
+                    <div>
+                        <span class="dashboard-kicker">Comunidade Coffee Lab</span>
+                        <h1>Seu círculo de cafés especiais</h1>
+                        <p>Compartilhe preparos, descubra receitas, acompanhe metas e veja o que outros baristas caseiros estão provando.</p>
+                    </div>
+                    <a href="#/profile" class="btn btn-secondary btn-auto">Editar perfil público</a>
+                </div>
+
+                <div class="social-layout">
+                    <div class="social-main">
+                        <form id="social-post-form" class="card social-composer">
+                            <label for="social-post-content">Publicar no feed</label>
+                            <textarea id="social-post-content" rows="3" maxlength="1200" placeholder="Conte qual café você preparou, o método, uma descoberta sensorial ou uma dica rápida..." required></textarea>
+                            <div class="social-composer-actions">
+                                <select id="social-post-visibility">
+                                    <option value="public">Público</option>
+                                    <option value="private">Privado</option>
+                                </select>
+                                <button type="submit" class="btn btn-primary btn-auto">Publicar</button>
+                            </div>
+                        </form>
+
+                        <div class="social-tabs" id="social-feed-filters">
+                            <button class="active" type="button" data-filter="general">Geral</button>
+                            <button type="button" data-filter="following">Seguindo</button>
+                            <button type="button" data-filter="mine">Minhas atividades</button>
+                            <button type="button" data-filter="popular_coffees">Cafés populares</button>
+                            <button type="button" data-filter="popular_recipes">Receitas populares</button>
+                        </div>
+                        <div id="social-feed-list" class="social-feed-list"></div>
+                    </div>
+
+                    <aside class="social-side">
+                        <div class="card social-panel">
+                            <h3>Receitas públicas</h3>
+                            <p>Compartilhe suas receitas favoritas na comunidade.</p>
+                            <select id="social-share-recipe-select"></select>
+                            <button id="social-share-recipe-btn" type="button" class="btn btn-primary btn-auto">Compartilhar receita</button>
+                            <div id="social-public-recipes" class="social-compact-list"></div>
+                        </div>
+
+                        <form id="social-wishlist-form" class="card social-panel">
+                            <h3>Quero provar</h3>
+                            <input id="wishlist-coffee-name" type="text" placeholder="Nome do café" required>
+                            <input id="wishlist-roastery" type="text" placeholder="Torrefação">
+                            <button type="submit" class="btn btn-secondary btn-auto">Adicionar</button>
+                            <div id="social-wishlist-list" class="social-compact-list"></div>
+                        </form>
+
+                        <form id="social-goal-form" class="card social-panel">
+                            <h3>Meta de café</h3>
+                            <input id="social-goal-title" type="text" placeholder="Ex: 20 extrações no mês" required>
+                            <div class="form-row">
+                                <input id="social-goal-target" type="number" min="1" max="10000" placeholder="Meta" required>
+                                <select id="social-goal-type">
+                                    <option value="extractions">Extrações</option>
+                                    <option value="methods">Métodos</option>
+                                    <option value="coffees">Cafés</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-secondary btn-auto">Criar meta</button>
+                            <div id="social-goals-list" class="social-compact-list"></div>
+                        </form>
+
+                        <div class="card social-panel">
+                            <h3>Explorar</h3>
+                            <div id="social-rankings" class="social-compact-list"></div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
 
         </main> <!-- FECHAMENTO DO MAIN AQUI! -->
     </div> <!-- FECHAMENTO DO APP CONTAINER -->

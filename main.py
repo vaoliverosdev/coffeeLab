@@ -10,6 +10,7 @@ from typing import Annotated, Optional, List
 from datetime import date, datetime, timedelta
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy import inspect, text
+from sqlalchemy import func
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Query, Header, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,7 +30,12 @@ from core import (
     Stock, StockUpdate, StockResponse, StockMovement,
     Recipe, RecipeCreate, RecipeUpdate, RecipeResponse, MotorCalculationRequest, MotorCalculationResponse,
     ExtractionResponse, ExtractionCreate, Extraction, SensoryLog, SensoryLogCreate, SensoryLogResponse, 
-    SensoryUserProfileResponse, Beverage, BeverageCreate, BeverageResponse, 
+    SensoryUserProfileResponse, Beverage, BeverageCreate, BeverageResponse,
+    Follow, CoffeeReview, CoffeeRating, ActivityFeed, Post, Comment, Like, SavedItem, PublicRecipe,
+    CoffeeWishlist, CafeTried, CoffeeGoal, PublicUserSummary, PostCreate, PostResponse,
+    CoffeeReviewCreate, CoffeeReviewResponse, CoffeeRatingCreate, CoffeeRatingResponse, CommentCreate, CommentResponse,
+    WishlistCreate, WishlistResponse, TriedCoffeeCreate, TriedCoffeeResponse,
+    CoffeeGoalCreate, CoffeeGoalResponse, PublicRecipeResponse, ActivityResponse,
 )
 import httpx
 import re
@@ -56,6 +62,18 @@ def ensure_auth_columns() -> None:
             "password_reset_token_hash": "VARCHAR(128)",
             "password_reset_expires_at": "TIMESTAMP",
             "google_sub": "VARCHAR(255)",
+            "password_login_enabled": "BOOLEAN NOT NULL DEFAULT 1",
+            "username": "VARCHAR(80)",
+            "city": "VARCHAR(120)",
+            "country": "VARCHAR(120)",
+            "favorite_methods": "JSON",
+            "favorite_roasteries": "JSON",
+            "sensory_preferences": "JSON",
+            "mastered_methods": "JSON",
+            "barista_setup": "JSON",
+            "is_public_profile": "BOOLEAN NOT NULL DEFAULT 0",
+            "profile_visibility": "VARCHAR(20) NOT NULL DEFAULT 'private'",
+            "diary_visibility": "VARCHAR(20) NOT NULL DEFAULT 'private'",
         }
         with engine.begin() as conn:
             existing = {column["name"] for column in inspect(conn).get_columns("users")}
@@ -63,6 +81,7 @@ def ensure_auth_columns() -> None:
                 if column_name not in existing:
                     conn.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {column_sql}"))
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
             conn.execute(text(
                 "UPDATE users SET email_verified = 1 "
                 "WHERE email_verified = 0 AND email_verification_token_hash IS NULL"
@@ -76,7 +95,20 @@ def ensure_auth_columns() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash VARCHAR(128)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_login_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(80)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(120)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(120)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_methods JSON",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS favorite_roasteries JSON",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS sensory_preferences JSON",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS mastered_methods JSON",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS barista_setup JSON",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_public_profile BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_visibility VARCHAR(20) NOT NULL DEFAULT 'private'",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS diary_visibility VARCHAR(20) NOT NULL DEFAULT 'private'",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -96,6 +128,302 @@ def create_secure_token() -> tuple[str, str]:
 def app_url(path_with_hash: str) -> str:
     base_url = get_settings().public_base_url.rstrip("/")
     return f"{base_url}/{path_with_hash.lstrip('/')}"
+
+def normalize_username(value: str) -> str:
+    username = re.sub(r"[^a-z0-9_.]+", "", value.lower().strip())
+    username = username.strip("._")
+    return username[:30] or "barista"
+
+def generate_unique_username(db: Session, name: str, email: str) -> str:
+    base_source = name or email.split("@")[0]
+    base = normalize_username(base_source)
+    if len(base) < 3:
+        base = f"{base}lab"[:30]
+    candidate = base
+    suffix = 2
+    while db.query(User).filter(User.username == candidate).first():
+        tail = str(suffix)
+        candidate = f"{base[:30 - len(tail)]}{tail}"
+        suffix += 1
+    return candidate
+
+def clean_profile_list(values: Optional[list]) -> list[str]:
+    cleaned: list[str] = []
+    for value in values or []:
+        item = str(value or "").strip()
+        if item and item not in cleaned:
+            cleaned.append(item[:80])
+    return cleaned[:12]
+
+def clean_barista_setup(value: Optional[dict]) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    allowed = ("grinder", "kettle", "scale", "espresso_machine", "brewers")
+    cleaned: dict[str, str] = {}
+    for key in allowed:
+        item = str(value.get(key) or "").strip()
+        if item:
+            cleaned[key] = item[:120]
+    return cleaned
+
+def user_to_response(user: User) -> UserResponse:
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        username=user.username,
+        bio=user.bio,
+        avatar_url=user.avatar_url,
+        city=user.city,
+        country=user.country,
+        favorite_methods=clean_profile_list(getattr(user, "favorite_methods", None)),
+        favorite_roasteries=clean_profile_list(getattr(user, "favorite_roasteries", None)),
+        sensory_preferences=clean_profile_list(getattr(user, "sensory_preferences", None)),
+        mastered_methods=clean_profile_list(getattr(user, "mastered_methods", None)),
+        barista_setup=clean_barista_setup(getattr(user, "barista_setup", None)),
+        is_public_profile=bool(getattr(user, "is_public_profile", False)),
+        profile_visibility=getattr(user, "profile_visibility", "public" if getattr(user, "is_public_profile", False) else "private"),
+        diary_visibility=getattr(user, "diary_visibility", "private"),
+        is_active=bool(user.is_active),
+        email_verified=bool(user.email_verified),
+        google_connected=bool(user.google_sub),
+        password_login_enabled=bool(getattr(user, "password_login_enabled", True)),
+    )
+
+def public_user(user: Optional[User]) -> Optional[PublicUserSummary]:
+    if not user:
+        return None
+    return PublicUserSummary(
+        id=user.id,
+        name=user.name,
+        username=user.username,
+        avatar_url=user.avatar_url,
+    )
+
+def count_target(db: Session, model, target_type: str, target_id: int) -> int:
+    return db.query(model).filter(model.target_type == target_type, model.target_id == target_id).count()
+
+def liked_by(db: Session, user_id: Optional[int], target_type: str, target_id: int) -> bool:
+    if not user_id:
+        return False
+    return db.query(Like).filter(
+        Like.user_id == user_id,
+        Like.target_type == target_type,
+        Like.target_id == target_id,
+    ).first() is not None
+
+def saved_by(db: Session, user_id: Optional[int], target_type: str, target_id: int) -> bool:
+    if not user_id:
+        return False
+    return db.query(SavedItem).filter(
+        SavedItem.user_id == user_id,
+        SavedItem.target_type == target_type,
+        SavedItem.target_id == target_id,
+    ).first() is not None
+
+def validate_limit_offset(limit: int, offset: int, max_limit: int = 100) -> tuple[int, int]:
+    return max(1, min(limit, max_limit)), max(0, offset)
+
+def can_view_profile(viewer: Optional[User], target: Optional[User]) -> bool:
+    if not target:
+        return False
+    if viewer and viewer.id == target.id:
+        return True
+    return bool(getattr(target, "is_public_profile", False) or getattr(target, "profile_visibility", "private") == "public")
+
+def assert_social_target_visible(db: Session, target_type: str, target_id: int, user: User) -> None:
+    visible = False
+    if target_type == "activity":
+        item = db.query(ActivityFeed).filter(ActivityFeed.id == target_id).first()
+        visible = bool(item and (item.visibility == "public" or item.user_id == user.id))
+    elif target_type == "post":
+        item = db.query(Post).filter(Post.id == target_id).first()
+        visible = bool(item and (item.visibility == "public" or item.user_id == user.id))
+    elif target_type == "review":
+        item = db.query(CoffeeReview).filter(CoffeeReview.id == target_id).first()
+        visible = bool(item and (item.visibility == "public" or item.user_id == user.id))
+    elif target_type == "public_recipe":
+        visible = db.query(PublicRecipe.id).filter(PublicRecipe.id == target_id).first() is not None
+    elif target_type == "recipe":
+        visible = db.query(Recipe.id).filter(Recipe.id == target_id, Recipe.user_id == user.id).first() is not None
+    elif target_type == "coffee":
+        item = db.query(Coffee).filter(Coffee.id == target_id).first()
+        visible = bool(item and (item.user_id == user.id or can_view_profile(user, item.user)))
+    elif target_type == "extraction":
+        visible = db.query(Extraction.id).filter(Extraction.id == target_id, Extraction.user_id == user.id).first() is not None
+    if not visible:
+        raise HTTPException(status_code=404, detail="Item social não encontrado ou privado.")
+
+def create_activity(
+    db: Session,
+    user: User,
+    verb: str,
+    target_type: str,
+    target_id: Optional[int],
+    summary: str,
+    visibility: str = "public",
+) -> ActivityFeed:
+    activity = ActivityFeed(
+        user_id=user.id,
+        verb=verb,
+        target_type=target_type,
+        target_id=target_id,
+        summary=summary[:255],
+        visibility=visibility,
+    )
+    db.add(activity)
+    return activity
+
+def activity_to_response(db: Session, activity: ActivityFeed, current_user_id: Optional[int] = None) -> ActivityResponse:
+    return ActivityResponse(
+        id=activity.id,
+        user_id=activity.user_id,
+        verb=activity.verb,
+        target_type=activity.target_type,
+        target_id=activity.target_id,
+        summary=activity.summary,
+        visibility=activity.visibility,
+        created_at=activity.created_at,
+        user=public_user(activity.user),
+        likes_count=count_target(db, Like, "activity", activity.id),
+        comments_count=count_target(db, Comment, "activity", activity.id),
+        liked_by_me=liked_by(db, current_user_id, "activity", activity.id),
+    )
+
+def post_to_response(db: Session, post: Post, current_user_id: Optional[int] = None) -> PostResponse:
+    return PostResponse(
+        id=post.id,
+        user_id=post.user_id,
+        content=post.content,
+        image_url=post.image_url,
+        visibility=post.visibility,
+        created_at=post.created_at,
+        user=public_user(post.user),
+        likes_count=count_target(db, Like, "post", post.id),
+        comments_count=count_target(db, Comment, "post", post.id),
+        liked_by_me=liked_by(db, current_user_id, "post", post.id),
+    )
+
+def review_to_response(db: Session, review: CoffeeReview, current_user_id: Optional[int] = None) -> CoffeeReviewResponse:
+    return CoffeeReviewResponse(
+        id=review.id,
+        user_id=review.user_id,
+        coffee_id=review.coffee_id,
+        title=review.title,
+        body=review.body,
+        rating=review.rating,
+        visibility=review.visibility,
+        created_at=review.created_at,
+        user=public_user(review.user),
+        coffee=review.coffee,
+        likes_count=count_target(db, Like, "review", review.id),
+        comments_count=count_target(db, Comment, "review", review.id),
+        liked_by_me=liked_by(db, current_user_id, "review", review.id),
+    )
+
+def rating_to_response(rating: CoffeeRating) -> CoffeeRatingResponse:
+    return CoffeeRatingResponse(
+        id=rating.id,
+        user_id=rating.user_id,
+        coffee_id=rating.coffee_id,
+        coffee_name=rating.coffee_name,
+        rating=rating.rating,
+        scale=rating.scale,
+        visibility=rating.visibility,
+        created_at=rating.created_at,
+        user=public_user(rating.user),
+        coffee=rating.coffee,
+    )
+
+def public_recipe_to_response(db: Session, item: PublicRecipe, current_user_id: Optional[int] = None) -> PublicRecipeResponse:
+    return PublicRecipeResponse(
+        id=item.id,
+        user_id=item.user_id,
+        recipe_id=item.recipe_id,
+        title=item.title,
+        description=item.description,
+        created_at=item.created_at,
+        user=public_user(item.user),
+        recipe=item.recipe,
+        likes_count=count_target(db, Like, "public_recipe", item.id),
+        saves_count=count_target(db, SavedItem, "public_recipe", item.id),
+        saved_by_me=saved_by(db, current_user_id, "public_recipe", item.id),
+    )
+
+async def fetch_google_profile(credential: str) -> dict:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": credential},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Credencial do Google inválida.")
+    return response.json()
+
+def validate_google_profile(profile: dict) -> tuple[str, str, str, Optional[str]]:
+    settings = get_settings()
+    if profile.get("aud") != settings.google_client_id:
+        raise HTTPException(status_code=401, detail="Credencial do Google não pertence a este app.")
+    if profile.get("email_verified") not in ("true", True):
+        raise HTTPException(status_code=401, detail="O Google não confirmou este e-mail.")
+
+    email = str(profile.get("email") or "").strip().lower()
+    google_sub = str(profile.get("sub") or "").strip()
+    name = str(profile.get("name") or email.split("@")[0] or "Barista").strip()
+    avatar_url = profile.get("picture")
+    if not email or not google_sub:
+        raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
+    return email, google_sub, name, avatar_url
+
+def resolve_google_user(
+    db: Session,
+    email: str,
+    google_sub: str,
+    name: str,
+    avatar_url: Optional[str],
+) -> User:
+    user_by_sub = db.query(User).filter(User.google_sub == google_sub).first()
+    user_by_email = db.query(User).filter(User.email == email).first()
+
+    if user_by_sub and user_by_email and user_by_sub.id != user_by_email.id:
+        raise HTTPException(
+            status_code=409,
+            detail="Esta conta Google já está vinculada a outro perfil.",
+        )
+
+    if user_by_sub:
+        if user_by_sub.email != email:
+            raise HTTPException(
+                status_code=409,
+                detail="O e-mail desta conta Google mudou. Entre em contato para revisar o vínculo.",
+            )
+        user = user_by_sub
+    elif user_by_email:
+        user = user_by_email
+        user.google_sub = google_sub
+    else:
+        user = User(
+            email=email,
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+            name=name,
+            username=generate_unique_username(db, name, email),
+            avatar_url=avatar_url,
+            is_active=True,
+            email_verified=True,
+            google_sub=google_sub,
+            password_login_enabled=False,
+        )
+        db.add(user)
+
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Conta indisponível.")
+
+    user.email_verified = True
+    if avatar_url and not user.avatar_url:
+        user.avatar_url = avatar_url
+    if not user.name:
+        user.name = name
+    return user
 
 def smtp_is_configured() -> bool:
     settings = get_settings()
@@ -257,7 +585,9 @@ def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db
         email=normalized_email,
         hashed_password=hash_password(user_in.password),
         name=user_in.name.strip(),
+        username=generate_unique_username(db, user_in.name, normalized_email),
         email_verified=False,
+        password_login_enabled=True,
         email_verification_token_hash=token_hash,
         email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
     )
@@ -288,7 +618,16 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
             status_code=403,
             detail="Verifique seu e-mail antes de entrar. Use o link enviado ou solicite um novo.",
         )
-    return {"access_token": create_access_token(data={"sub": u.email}), "token_type": "bearer", "user": u}
+    if not getattr(u, "password_login_enabled", True):
+        raise HTTPException(
+            status_code=401,
+            detail="Esta conta usa Google. Defina uma senha pelo perfil ou recuperação para entrar com e-mail.",
+        )
+    return {
+        "access_token": create_access_token(data={"sub": u.email}),
+        "token_type": "bearer",
+        "user": user_to_response(u),
+    }
 
 @app.post("/api/auth/resend-verification", response_model=AuthActionResponse)
 def resend_verification(req: PasswordRecoveryRequest, request: Request, db: Session = Depends(get_db)):
@@ -352,6 +691,7 @@ def reset_password(req: PasswordResetRequest, request: Request, db: Session = De
         raise HTTPException(status_code=400, detail="Link de recuperação expirado. Solicite um novo.")
 
     user.hashed_password = hash_password(req.password)
+    user.password_login_enabled = True
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.email_verified = True
@@ -365,58 +705,204 @@ async def google_login(req: GoogleLoginRequest, request: Request, db: Session = 
     if not settings.google_client_id:
         raise HTTPException(status_code=400, detail="Login com Google não configurado.")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": req.credential},
-        )
-    if response.status_code != 200:
-        raise HTTPException(status_code=401, detail="Credencial do Google inválida.")
-
-    profile = response.json()
-    if profile.get("aud") != settings.google_client_id:
-        raise HTTPException(status_code=401, detail="Credencial do Google não pertence a este app.")
-    if profile.get("email_verified") not in ("true", True):
-        raise HTTPException(status_code=401, detail="O Google não confirmou este e-mail.")
-
-    email = str(profile.get("email") or "").lower()
-    google_sub = str(profile.get("sub") or "")
-    name = str(profile.get("name") or email.split("@")[0] or "Barista")
-    avatar_url = profile.get("picture")
-    if not email or not google_sub:
-        raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
-
-    user = db.query(User).filter(or_(User.email == email, User.google_sub == google_sub)).first()
-    if not user:
-        user = User(
-            email=email,
-            hashed_password=hash_password(secrets.token_urlsafe(32)),
-            name=name,
-            avatar_url=avatar_url,
-            email_verified=True,
-            google_sub=google_sub,
-        )
-        db.add(user)
-    else:
-        user.email_verified = True
-        user.google_sub = google_sub
-        if avatar_url and not user.avatar_url:
-            user.avatar_url = avatar_url
+    profile = await fetch_google_profile(req.credential)
+    email, google_sub, name, avatar_url = validate_google_profile(profile)
+    user = resolve_google_user(db, email, google_sub, name, avatar_url)
     db.commit()
     db.refresh(user)
-    return {"access_token": create_access_token(data={"sub": user.email}), "token_type": "bearer", "user": user}
+    return {
+        "access_token": create_access_token(data={"sub": user.email}),
+        "token_type": "bearer",
+        "user": user_to_response(user),
+    }
+
+@app.post("/api/auth/me/google", response_model=UserResponse)
+async def connect_google(
+    req: GoogleLoginRequest,
+    request: Request,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    check_auth_rate_limit(request, "google-connect", limit=8, minutes=15)
+    settings = get_settings()
+    if not settings.google_client_id:
+        raise HTTPException(status_code=400, detail="Login com Google não configurado.")
+
+    current_user = await get_current_user(db, token=authorization)
+    profile = await fetch_google_profile(req.credential)
+    email, google_sub, _name, avatar_url = validate_google_profile(profile)
+    if current_user.email != email:
+        raise HTTPException(
+            status_code=409,
+            detail="A conta Google precisa usar o mesmo e-mail do seu perfil para ser conectada.",
+        )
+
+    linked_user = db.query(User).filter(User.google_sub == google_sub, User.id != current_user.id).first()
+    if linked_user:
+        raise HTTPException(status_code=409, detail="Esta conta Google já está vinculada a outro perfil.")
+
+    current_user.google_sub = google_sub
+    current_user.email_verified = True
+    if avatar_url and not current_user.avatar_url:
+        current_user.avatar_url = avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return user_to_response(current_user)
+
+@app.delete("/api/auth/me/google", response_model=UserResponse)
+async def disconnect_google(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    current_user = await get_current_user(db, token=authorization)
+    if not current_user.google_sub:
+        return user_to_response(current_user)
+    if not getattr(current_user, "password_login_enabled", True):
+        raise HTTPException(
+            status_code=400,
+            detail="Defina uma senha antes de desconectar o Google.",
+        )
+
+    current_user.google_sub = None
+    db.commit()
+    db.refresh(current_user)
+    return user_to_response(current_user)
 
 @app.get("/api/auth/me", response_model=UserResponse)
 async def get_me(authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
-    return await get_current_user(db, token=authorization)
+    return user_to_response(await get_current_user(db, token=authorization))
 
 @app.put("/api/auth/me", response_model=UserResponse)
 async def update_profile(profile_data: ProfileUpdate, authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
-    if profile_data.name: u.name = profile_data.name
+    if profile_data.name: u.name = profile_data.name.strip()[:120]
+    if profile_data.username:
+        username = normalize_username(profile_data.username)
+        if len(username) < 3:
+            raise HTTPException(status_code=422, detail="Username precisa ter pelo menos 3 caracteres.")
+        existing = db.query(User).filter(User.username == username, User.id != u.id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Este username já está em uso.")
+        u.username = username
     if profile_data.bio is not None: u.bio = profile_data.bio
+    if profile_data.city is not None: u.city = profile_data.city.strip()[:120] or None
+    if profile_data.country is not None: u.country = profile_data.country.strip()[:120] or None
+    if profile_data.favorite_methods is not None:
+        u.favorite_methods = clean_profile_list(profile_data.favorite_methods)
+    if profile_data.favorite_roasteries is not None:
+        u.favorite_roasteries = clean_profile_list(profile_data.favorite_roasteries)
+    if profile_data.sensory_preferences is not None:
+        u.sensory_preferences = clean_profile_list(profile_data.sensory_preferences)
+    if profile_data.mastered_methods is not None:
+        u.mastered_methods = clean_profile_list(profile_data.mastered_methods)
+    if profile_data.barista_setup is not None:
+        u.barista_setup = clean_barista_setup(profile_data.barista_setup)
+    if profile_data.is_public_profile is not None:
+        u.is_public_profile = bool(profile_data.is_public_profile)
+        u.profile_visibility = "public" if u.is_public_profile else "private"
+    if profile_data.profile_visibility is not None:
+        visibility = "public" if profile_data.profile_visibility == "public" else "private"
+        u.profile_visibility = visibility
+        u.is_public_profile = visibility == "public"
+    if profile_data.diary_visibility is not None:
+        u.diary_visibility = "public" if profile_data.diary_visibility == "public" else "private"
     db.commit(); db.refresh(u)
-    return u
+    return user_to_response(u)
+
+@app.get("/api/users/{username}/profile")
+async def get_public_profile(username: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == normalize_username(username)).first()
+    if not user or (not user.is_public_profile and getattr(user, "profile_visibility", "private") != "public"):
+        raise HTTPException(status_code=404, detail="Perfil público não encontrado.")
+
+    coffees = db.query(Coffee).filter(Coffee.user_id == user.id).all()
+    recipes = db.query(Recipe).filter(Recipe.user_id == user.id).all()
+    extractions = db.query(Extraction).filter(Extraction.user_id == user.id).all()
+    sensory_logs = db.query(SensoryLog).filter(SensoryLog.user_id == user.id).order_by(desc(SensoryLog.created_at)).all()
+    ratings = db.query(CoffeeRating).filter(CoffeeRating.user_id == user.id, CoffeeRating.visibility == "public").order_by(desc(CoffeeRating.created_at)).limit(24).all()
+    tried = db.query(CafeTried).filter(CafeTried.user_id == user.id).order_by(desc(CafeTried.tried_at)).limit(24).all()
+    wishlist = db.query(CoffeeWishlist).filter(CoffeeWishlist.user_id == user.id).order_by(desc(CoffeeWishlist.created_at)).limit(24).all()
+    posts = db.query(Post).filter(Post.user_id == user.id, Post.visibility == "public").order_by(desc(Post.created_at)).limit(12).all()
+    public_recipes = db.query(PublicRecipe).filter(PublicRecipe.user_id == user.id).order_by(desc(PublicRecipe.created_at)).limit(12).all()
+    activities = db.query(ActivityFeed).filter(ActivityFeed.user_id == user.id, ActivityFeed.visibility == "public").order_by(desc(ActivityFeed.created_at)).limit(20).all()
+
+    from collections import Counter
+    method_counts = Counter(recipe.method for recipe in recipes if recipe.method)
+    origin_counts = Counter(coffee.origin for coffee in coffees if coffee.origin)
+    note_counts: Counter[str] = Counter()
+    for log in sensory_logs:
+        if log.perceived_notes:
+            note_counts.update(note.strip().capitalize() for note in re.split(r"[,;]", log.perceived_notes) if note.strip())
+    extraction_days = {ext.extraction_date.date() for ext in extractions if ext.extraction_date}
+    streak = 0
+    day = datetime.utcnow().date()
+    while day in extraction_days:
+        streak += 1
+        day -= timedelta(days=1)
+    recipe_by_id = {recipe.id: recipe for recipe in recipes}
+    grams_prepared = round(sum(float(recipe_by_id.get(ext.recipe_id).coffee_weight or 0) for ext in extractions if ext.recipe_id in recipe_by_id), 1)
+    followers_count = db.query(Follow).filter(Follow.following_id == user.id).count()
+    following_count = db.query(Follow).filter(Follow.follower_id == user.id).count()
+    goals = db.query(CoffeeGoal).filter(CoffeeGoal.user_id == user.id).order_by(desc(CoffeeGoal.created_at)).limit(8).all()
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_extractions = [ext for ext in extractions if ext.extraction_date and ext.extraction_date >= month_start]
+    roastery_counts = Counter(coffee.roastery for coffee in coffees if coffee.roastery)
+    stock_items = db.query(Stock).join(Coffee).filter(Coffee.user_id == user.id).all()
+    grams_consumed = round(sum(abs(m.quantity_changed) for item in stock_items for m in item.movements if m.quantity_changed < 0), 1)
+    diary_is_public = getattr(user, "diary_visibility", "private") == "public"
+    mastered_methods = clean_profile_list(getattr(user, "mastered_methods", None)) or [
+        method for method, total in method_counts.most_common(8) if total >= 2
+    ]
+
+    return {
+        "name": user.name,
+        "username": user.username,
+        "bio": user.bio,
+        "avatar_url": user.avatar_url,
+        "city": user.city,
+        "country": user.country,
+        "favorite_methods": clean_profile_list(user.favorite_methods),
+        "favorite_roasteries": clean_profile_list(user.favorite_roasteries),
+        "sensory_preferences": clean_profile_list(user.sensory_preferences),
+        "mastered_methods": mastered_methods,
+        "diary_visibility": getattr(user, "diary_visibility", "private"),
+        "barista_setup": clean_barista_setup(getattr(user, "barista_setup", None)),
+        "stats": {
+            "coffees": db.query(Coffee).filter(Coffee.user_id == user.id).count(),
+            "recipes": db.query(Recipe).filter(Recipe.user_id == user.id).count(),
+            "extractions": db.query(Extraction).filter(Extraction.user_id == user.id).count(),
+            "sensory_logs": db.query(SensoryLog).filter(SensoryLog.user_id == user.id).count(),
+            "cafes_tried": db.query(CafeTried).filter(CafeTried.user_id == user.id).count(),
+            "coffee_ratings": db.query(CoffeeRating).filter(CoffeeRating.user_id == user.id).count(),
+            "grams_prepared": grams_prepared,
+            "grams_consumed": grams_consumed,
+            "cups_extracted": len(extractions),
+            "cups_this_month": len(month_extractions),
+            "methods_used": len(method_counts),
+            "mastered_methods": len(mastered_methods),
+            "roasteries_explored": len(roastery_counts),
+            "origins_explored": len(origin_counts),
+            "open_coffees": sum(1 for item in stock_items if item.is_opened),
+            "followers": followers_count,
+            "following": following_count,
+            "current_streak_days": streak,
+            "favorite_method": method_counts.most_common(1)[0][0] if method_counts else None,
+            "top_origin": origin_counts.most_common(1)[0][0] if origin_counts else None,
+            "top_sensory_notes": [item[0] for item in note_counts.most_common(6)],
+            "top_roasteries": [item[0] for item in roastery_counts.most_common(6)],
+        },
+        "tabs": {
+            "overview": [activity_to_response(db, activity).model_dump(mode="json") for activity in activities[:6]],
+            "cafes_tried": [TriedCoffeeResponse.model_validate(item).model_dump(mode="json") for item in tried],
+            "ratings": [rating_to_response(item).model_dump(mode="json") for item in ratings],
+            "recipes": [public_recipe_to_response(db, item).model_dump(mode="json") for item in public_recipes],
+            "sensory": [SensoryLogResponse.model_validate(log).model_dump(mode="json") for log in sensory_logs[:12]] if diary_is_public else [],
+            "feed": [activity_to_response(db, activity).model_dump(mode="json") for activity in activities],
+            "favorites": [],
+            "wishlist": [WishlistResponse.model_validate(item).model_dump(mode="json") for item in wishlist],
+            "goals": [CoffeeGoalResponse.model_validate(goal).model_dump(mode="json") for goal in goals],
+        },
+    }
 
 @app.put("/api/auth/me/password", response_model=AuthActionResponse)
 async def change_password(
@@ -425,16 +911,902 @@ async def change_password(
     db: Session = Depends(get_db),
 ):
     u = await get_current_user(db, token=authorization)
-    if not verify_password(req.current_password, u.hashed_password):
+    if getattr(u, "password_login_enabled", True) and not req.current_password:
+        raise HTTPException(status_code=401, detail="Informe sua senha atual.")
+    if getattr(u, "password_login_enabled", True) and not verify_password(req.current_password, u.hashed_password):
         raise HTTPException(status_code=401, detail="Senha atual incorreta.")
-    if verify_password(req.new_password, u.hashed_password):
+    if getattr(u, "password_login_enabled", True) and verify_password(req.new_password, u.hashed_password):
         raise HTTPException(status_code=400, detail="A nova senha precisa ser diferente da senha atual.")
 
     u.hashed_password = hash_password(req.new_password)
+    u.password_login_enabled = True
     u.password_reset_token_hash = None
     u.password_reset_expires_at = None
     db.commit()
     return {"detail": "Senha alterada com sucesso."}
+
+
+# --- ENDPOINTS SOCIAIS (REDE DE CAFÉS) ---
+@app.get("/api/social/feed", response_model=List[ActivityResponse])
+async def get_social_feed(
+    filter: str = Query("general", pattern="^(general|following|mine|popular_coffees|popular_recipes)$"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    limit, offset = validate_limit_offset(limit, offset)
+    query = db.query(ActivityFeed).filter(ActivityFeed.visibility == "public")
+    if filter == "mine":
+        query = query.filter(ActivityFeed.user_id == user.id)
+    elif filter == "following":
+        following_ids = [row.following_id for row in db.query(Follow).filter(Follow.follower_id == user.id).all()]
+        if not following_ids:
+            return []
+        query = query.filter(ActivityFeed.user_id.in_(following_ids))
+    elif filter == "popular_coffees":
+        query = query.filter(ActivityFeed.target_type.in_(["coffee", "review", "rating", "tried"]))
+    elif filter == "popular_recipes":
+        query = query.filter(ActivityFeed.target_type.in_(["recipe", "public_recipe"]))
+    activities = query.order_by(desc(ActivityFeed.created_at)).offset(offset).limit(limit).all()
+    return [activity_to_response(db, activity, user.id) for activity in activities]
+
+
+@app.post("/api/social/posts", response_model=PostResponse, status_code=status.HTTP_201_CREATED)
+async def create_social_post(
+    payload: PostCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    visibility = "private" if payload.visibility == "private" else "public"
+    post = Post(
+        user_id=user.id,
+        content=payload.content.strip(),
+        image_url=payload.image_url,
+        visibility=visibility,
+    )
+    db.add(post)
+    db.flush()
+    create_activity(db, user, "publicou", "post", post.id, f"{user.name} publicou sobre café.", visibility)
+    db.commit()
+    db.refresh(post)
+    return post_to_response(db, post, user.id)
+
+
+@app.post("/api/social/reviews", response_model=CoffeeReviewResponse, status_code=status.HTTP_201_CREATED)
+async def create_coffee_review(
+    payload: CoffeeReviewCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    coffee = None
+    if payload.coffee_id:
+        coffee = db.query(Coffee).filter(Coffee.id == payload.coffee_id, Coffee.user_id == user.id).first()
+        if not coffee:
+            raise HTTPException(status_code=404, detail="Café não encontrado.")
+    visibility = "private" if payload.visibility == "private" else "public"
+    review = CoffeeReview(
+        user_id=user.id,
+        coffee_id=payload.coffee_id,
+        title=payload.title.strip(),
+        body=payload.body,
+        rating=payload.rating,
+        visibility=visibility,
+    )
+    db.add(review)
+    db.flush()
+    target_name = coffee.name if coffee else payload.title
+    create_activity(db, user, "avaliou", "review", review.id, f"{user.name} avaliou {target_name} com {payload.rating:g}/5.", visibility)
+    db.commit()
+    db.refresh(review)
+    return review_to_response(db, review, user.id)
+
+
+@app.post("/api/social/ratings", response_model=CoffeeRatingResponse, status_code=status.HTTP_201_CREATED)
+async def create_coffee_rating(
+    payload: CoffeeRatingCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    data = payload.model_dump()
+    coffee = None
+    if payload.coffee_id:
+        coffee = db.query(Coffee).filter(Coffee.id == payload.coffee_id, Coffee.user_id == user.id).first()
+        if not coffee:
+            raise HTTPException(status_code=404, detail="Café não encontrado.")
+        data["coffee_name"] = coffee.name
+    visibility = "private" if payload.visibility == "private" else "public"
+    scale = "hundred" if payload.scale == "hundred" else "five"
+    if scale == "five" and not 1 <= payload.rating <= 5:
+        raise HTTPException(status_code=422, detail="Notas na escala 1 a 5 precisam ficar entre 1 e 5.")
+    rating = CoffeeRating(
+        user_id=user.id,
+        coffee_id=data.get("coffee_id"),
+        coffee_name=data["coffee_name"].strip(),
+        rating=data["rating"],
+        scale=scale,
+        visibility=visibility,
+    )
+    db.add(rating)
+    db.flush()
+    scale_label = "/100" if scale == "hundred" else "/5"
+    create_activity(db, user, "deu nota", "rating", rating.id, f"{user.name} deu nota {rating.rating:g}{scale_label} para {rating.coffee_name}.", visibility)
+    db.commit()
+    db.refresh(rating)
+    return rating_to_response(rating)
+
+
+@app.post("/api/social/follow/{username}")
+async def follow_user(
+    username: str,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    target = db.query(User).filter(User.username == normalize_username(username), User.is_public_profile == True).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Perfil público não encontrado.")
+    if target.id == user.id:
+        raise HTTPException(status_code=400, detail="Você não pode seguir seu próprio perfil.")
+    existing = db.query(Follow).filter(Follow.follower_id == user.id, Follow.following_id == target.id).first()
+    if not existing:
+        db.add(Follow(follower_id=user.id, following_id=target.id))
+        create_activity(db, user, "seguiu", "user", target.id, f"{user.name} começou a seguir {target.name}.")
+        db.commit()
+    return {"following": True}
+
+
+@app.delete("/api/social/follow/{username}")
+async def unfollow_user(
+    username: str,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    target = db.query(User).filter(User.username == normalize_username(username)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    existing = db.query(Follow).filter(Follow.follower_id == user.id, Follow.following_id == target.id).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+    return {"following": False}
+
+
+@app.get("/api/social/users/{username}/followers", response_model=List[PublicUserSummary])
+async def list_followers(
+    username: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    viewer = await get_current_user(db, token=authorization)
+    target = db.query(User).filter(User.username == normalize_username(username)).first()
+    if not can_view_profile(viewer, target):
+        raise HTTPException(status_code=404, detail="Perfil público não encontrado.")
+    limit, offset = validate_limit_offset(limit, offset)
+    rows = (
+        db.query(User)
+        .join(Follow, Follow.follower_id == User.id)
+        .filter(Follow.following_id == target.id, User.is_active == True)
+        .order_by(User.name)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return [public_user(user) for user in rows]
+
+
+@app.get("/api/social/users/{username}/following", response_model=List[PublicUserSummary])
+async def list_following(
+    username: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    viewer = await get_current_user(db, token=authorization)
+    target = db.query(User).filter(User.username == normalize_username(username)).first()
+    if not can_view_profile(viewer, target):
+        raise HTTPException(status_code=404, detail="Perfil público não encontrado.")
+    limit, offset = validate_limit_offset(limit, offset)
+    rows = (
+        db.query(User)
+        .join(Follow, Follow.following_id == User.id)
+        .filter(Follow.follower_id == target.id, User.is_active == True)
+        .order_by(User.name)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return [public_user(user) for user in rows]
+
+
+@app.get("/api/social/users/{username}/activities", response_model=List[ActivityResponse])
+async def list_user_activities(
+    username: str,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    viewer = await get_current_user(db, token=authorization)
+    target = db.query(User).filter(User.username == normalize_username(username)).first()
+    if not can_view_profile(viewer, target):
+        raise HTTPException(status_code=404, detail="Perfil público não encontrado.")
+    limit, offset = validate_limit_offset(limit, offset)
+    query = db.query(ActivityFeed).filter(ActivityFeed.user_id == target.id)
+    if viewer.id != target.id:
+        query = query.filter(ActivityFeed.visibility == "public")
+    activities = query.order_by(desc(ActivityFeed.created_at)).offset(offset).limit(limit).all()
+    return [activity_to_response(db, activity, viewer.id) for activity in activities]
+
+
+@app.post("/api/social/{target_type}/{target_id}/like")
+async def toggle_like(
+    target_type: str,
+    target_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    if target_type not in {"activity", "post", "review", "public_recipe", "recipe", "coffee"}:
+        raise HTTPException(status_code=400, detail="Tipo de item inválido.")
+    assert_social_target_visible(db, target_type, target_id, user)
+    existing = db.query(Like).filter(Like.user_id == user.id, Like.target_type == target_type, Like.target_id == target_id).first()
+    liked = existing is None
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(Like(user_id=user.id, target_type=target_type, target_id=target_id))
+    db.commit()
+    return {"liked": liked, "likes_count": count_target(db, Like, target_type, target_id)}
+
+
+@app.get("/api/social/{target_type}/{target_id}/comments", response_model=List[CommentResponse])
+async def list_comments(
+    target_type: str,
+    target_id: int,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    assert_social_target_visible(db, target_type, target_id, user)
+    limit, offset = validate_limit_offset(limit, offset)
+    comments = db.query(Comment).filter(Comment.target_type == target_type, Comment.target_id == target_id).order_by(Comment.created_at).offset(offset).limit(limit).all()
+    return [
+        CommentResponse(
+            id=item.id,
+            user_id=item.user_id,
+            target_type=item.target_type,
+            target_id=item.target_id,
+            body=item.body,
+            created_at=item.created_at,
+            user=public_user(item.user),
+        )
+        for item in comments
+    ]
+
+
+@app.post("/api/social/{target_type}/{target_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+async def create_comment(
+    target_type: str,
+    target_id: int,
+    payload: CommentCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    if target_type not in {"activity", "post", "review", "public_recipe", "recipe", "coffee", "extraction"}:
+        raise HTTPException(status_code=400, detail="Tipo de item inválido.")
+    assert_social_target_visible(db, target_type, target_id, user)
+    comment = Comment(user_id=user.id, target_type=target_type, target_id=target_id, body=payload.body.strip())
+    db.add(comment)
+    db.commit()
+    db.refresh(comment)
+    return CommentResponse(
+        id=comment.id,
+        user_id=comment.user_id,
+        target_type=comment.target_type,
+        target_id=comment.target_id,
+        body=comment.body,
+        created_at=comment.created_at,
+        user=public_user(user),
+    )
+
+
+@app.delete("/api/social/comments/{comment_id}")
+async def delete_comment(
+    comment_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    comment = db.query(Comment).filter(Comment.id == comment_id).first()
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comentário não encontrado.")
+    owns_parent = False
+    if comment.target_type == "activity":
+        owns_parent = db.query(ActivityFeed.id).filter(ActivityFeed.id == comment.target_id, ActivityFeed.user_id == user.id).first() is not None
+    elif comment.target_type == "post":
+        owns_parent = db.query(Post.id).filter(Post.id == comment.target_id, Post.user_id == user.id).first() is not None
+    elif comment.target_type == "review":
+        owns_parent = db.query(CoffeeReview.id).filter(CoffeeReview.id == comment.target_id, CoffeeReview.user_id == user.id).first() is not None
+    elif comment.target_type == "public_recipe":
+        owns_parent = db.query(PublicRecipe.id).filter(PublicRecipe.id == comment.target_id, PublicRecipe.user_id == user.id).first() is not None
+    if comment.user_id != user.id and not owns_parent:
+        raise HTTPException(status_code=403, detail="Você não tem permissão para remover este comentário.")
+    db.delete(comment)
+    db.commit()
+    return {"detail": "Comentário removido."}
+
+
+@app.post("/api/social/{target_type}/{target_id}/save")
+async def toggle_saved_item(
+    target_type: str,
+    target_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    if target_type not in {"public_recipe", "recipe", "coffee", "review", "post"}:
+        raise HTTPException(status_code=400, detail="Tipo de item inválido.")
+    existing = db.query(SavedItem).filter(SavedItem.user_id == user.id, SavedItem.target_type == target_type, SavedItem.target_id == target_id).first()
+    saved = existing is None
+    if existing:
+        db.delete(existing)
+    else:
+        db.add(SavedItem(user_id=user.id, target_type=target_type, target_id=target_id))
+    db.commit()
+    return {"saved": saved, "saves_count": count_target(db, SavedItem, target_type, target_id)}
+
+
+@app.post("/api/social/recipes/{recipe_id}/share", response_model=PublicRecipeResponse)
+async def share_recipe_publicly(
+    recipe_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id, Recipe.user_id == user.id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Receita não encontrada.")
+    item = db.query(PublicRecipe).filter(PublicRecipe.user_id == user.id, PublicRecipe.recipe_id == recipe.id).first()
+    if not item:
+        item = PublicRecipe(user_id=user.id, recipe_id=recipe.id, title=recipe.name, description=recipe.description)
+        db.add(item)
+        db.flush()
+        create_activity(db, user, "compartilhou", "public_recipe", item.id, f"{user.name} compartilhou a receita {recipe.name}.")
+        db.commit()
+        db.refresh(item)
+    return public_recipe_to_response(db, item, user.id)
+
+
+@app.get("/api/social/public-recipes", response_model=List[PublicRecipeResponse])
+async def list_public_recipes(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    limit, offset = validate_limit_offset(limit, offset)
+    items = db.query(PublicRecipe).order_by(desc(PublicRecipe.created_at)).offset(offset).limit(limit).all()
+    return [public_recipe_to_response(db, item, user.id) for item in items]
+
+
+@app.delete("/api/social/public-recipes/{public_recipe_id}")
+async def unpublish_recipe(
+    public_recipe_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    item = db.query(PublicRecipe).filter(PublicRecipe.id == public_recipe_id, PublicRecipe.user_id == user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Receita pública não encontrada.")
+    db.query(SavedItem).filter(SavedItem.target_type == "public_recipe", SavedItem.target_id == item.id).delete()
+    db.query(Like).filter(Like.target_type == "public_recipe", Like.target_id == item.id).delete()
+    db.query(Comment).filter(Comment.target_type == "public_recipe", Comment.target_id == item.id).delete()
+    db.query(ActivityFeed).filter(ActivityFeed.target_type == "public_recipe", ActivityFeed.target_id == item.id, ActivityFeed.user_id == user.id).delete()
+    db.delete(item)
+    db.commit()
+    return {"detail": "Receita despublicada."}
+
+
+@app.post("/api/social/public-recipes/{public_recipe_id}/copy", response_model=RecipeResponse, status_code=status.HTTP_201_CREATED)
+async def copy_public_recipe(
+    public_recipe_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    item = db.query(PublicRecipe).filter(PublicRecipe.id == public_recipe_id).first()
+    if not item or not item.recipe:
+        raise HTTPException(status_code=404, detail="Receita pública não encontrada.")
+    source = item.recipe
+    copy = Recipe(
+        user_id=user.id,
+        coffee_id=None,
+        name=f"{source.name} (copiada)",
+        method=source.method,
+        coffee_weight=source.coffee_weight,
+        water_weight=source.water_weight,
+        grind_size=source.grind_size,
+        water_temp=source.water_temp,
+        description=source.description,
+        steps=source.steps,
+        is_favorite=False,
+    )
+    db.add(copy)
+    db.flush()
+    db.add(SavedItem(user_id=user.id, target_type="public_recipe", target_id=item.id))
+    create_activity(db, user, "salvou", "recipe", copy.id, f"{user.name} copiou a receita {source.name}.")
+    db.commit()
+    db.refresh(copy)
+    return copy
+
+
+@app.get("/api/social/wishlist", response_model=List[WishlistResponse])
+async def list_wishlist(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    limit, offset = validate_limit_offset(limit, offset)
+    return db.query(CoffeeWishlist).filter(CoffeeWishlist.user_id == user.id).order_by(desc(CoffeeWishlist.created_at)).offset(offset).limit(limit).all()
+
+
+@app.post("/api/social/wishlist", response_model=WishlistResponse, status_code=status.HTTP_201_CREATED)
+async def add_wishlist_item(
+    payload: WishlistCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    item = CoffeeWishlist(user_id=user.id, **payload.model_dump())
+    db.add(item)
+    db.flush()
+    create_activity(db, user, "quer provar", "wishlist", item.id, f"{user.name} quer provar {item.coffee_name}.")
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.post("/api/social/coffees/{coffee_id}/wishlist", response_model=WishlistResponse, status_code=status.HTTP_201_CREATED)
+async def mark_coffee_wishlist(
+    coffee_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    coffee = db.query(Coffee).filter(Coffee.id == coffee_id).first()
+    if not coffee or (coffee.user_id != user.id and not can_view_profile(user, coffee.user)):
+        raise HTTPException(status_code=404, detail="Café não encontrado ou privado.")
+    existing = db.query(CoffeeWishlist).filter(
+        CoffeeWishlist.user_id == user.id,
+        CoffeeWishlist.coffee_name == coffee.name,
+        CoffeeWishlist.roastery == coffee.roastery,
+    ).first()
+    if existing:
+        return existing
+    item = CoffeeWishlist(user_id=user.id, coffee_name=coffee.name, roastery=coffee.roastery, origin=coffee.origin)
+    db.add(item)
+    db.flush()
+    create_activity(db, user, "quer provar", "wishlist", item.id, f"{user.name} quer provar {coffee.name}.")
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.delete("/api/social/wishlist/{item_id}")
+async def delete_wishlist_item(
+    item_id: int,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    item = db.query(CoffeeWishlist).filter(CoffeeWishlist.id == item_id, CoffeeWishlist.user_id == user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    db.delete(item)
+    db.commit()
+    return {"detail": "Item removido."}
+
+
+@app.get("/api/social/tried", response_model=List[TriedCoffeeResponse])
+async def list_tried_coffees(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    limit, offset = validate_limit_offset(limit, offset)
+    return db.query(CafeTried).filter(CafeTried.user_id == user.id).order_by(desc(CafeTried.tried_at)).offset(offset).limit(limit).all()
+
+
+@app.post("/api/social/tried", response_model=TriedCoffeeResponse, status_code=status.HTTP_201_CREATED)
+async def add_tried_coffee(
+    payload: TriedCoffeeCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    coffee = None
+    data = payload.model_dump()
+    if payload.coffee_id:
+        coffee = db.query(Coffee).filter(Coffee.id == payload.coffee_id, Coffee.user_id == user.id).first()
+        if coffee:
+            data.update({"coffee_name": coffee.name, "roastery": coffee.roastery, "origin": coffee.origin})
+    item = CafeTried(user_id=user.id, **data)
+    db.add(item)
+    db.flush()
+    create_activity(db, user, "provou", "tried", item.id, f"{user.name} provou {item.coffee_name}.")
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.post("/api/social/coffees/{coffee_id}/tried", response_model=TriedCoffeeResponse, status_code=status.HTTP_201_CREATED)
+async def mark_coffee_tried(
+    coffee_id: int,
+    payload: Optional[dict] = None,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    coffee = db.query(Coffee).filter(Coffee.id == coffee_id).first()
+    if not coffee or (coffee.user_id != user.id and not can_view_profile(user, coffee.user)):
+        raise HTTPException(status_code=404, detail="Café não encontrado ou privado.")
+    data = payload or {}
+    rating = data.get("rating")
+    if rating is not None and not 1 <= float(rating) <= 5:
+        raise HTTPException(status_code=422, detail="A nota precisa ficar entre 1 e 5.")
+    item = CafeTried(
+        user_id=user.id,
+        coffee_id=coffee.id,
+        coffee_name=coffee.name,
+        roastery=coffee.roastery,
+        origin=coffee.origin,
+        rating=rating,
+        notes=data.get("notes"),
+    )
+    db.add(item)
+    db.flush()
+    create_activity(db, user, "provou", "tried", item.id, f"{user.name} provou {coffee.name}.")
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@app.get("/api/social/goals", response_model=List[CoffeeGoalResponse])
+async def list_goals(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    limit, offset = validate_limit_offset(limit, offset)
+    return db.query(CoffeeGoal).filter(CoffeeGoal.user_id == user.id).order_by(desc(CoffeeGoal.created_at)).offset(offset).limit(limit).all()
+
+
+@app.post("/api/social/goals", response_model=CoffeeGoalResponse, status_code=status.HTTP_201_CREATED)
+async def create_goal(
+    payload: CoffeeGoalCreate,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    goal = CoffeeGoal(user_id=user.id, **payload.model_dump())
+    db.add(goal)
+    db.flush()
+    create_activity(db, user, "criou meta", "goal", goal.id, f"{user.name} criou a meta: {goal.title}.")
+    db.commit()
+    db.refresh(goal)
+    return goal
+
+
+@app.get("/api/social/explore")
+async def explore_social(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    popular_coffees = (
+        db.query(CafeTried.coffee_name, func.count(CafeTried.id).label("total"))
+        .group_by(CafeTried.coffee_name)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+    popular_recipes = (
+        db.query(PublicRecipe.id, PublicRecipe.title, func.count(SavedItem.id).label("saves"))
+        .outerjoin(SavedItem, (SavedItem.target_type == "public_recipe") & (SavedItem.target_id == PublicRecipe.id))
+        .group_by(PublicRecipe.id, PublicRecipe.title)
+        .order_by(desc("saves"), desc(PublicRecipe.created_at))
+        .limit(10)
+        .all()
+    )
+    popular_methods = (
+        db.query(Recipe.method, func.count(Recipe.id).label("total"))
+        .group_by(Recipe.method)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    active_users = (
+        db.query(User.id, User.name, User.username, User.avatar_url, func.count(ActivityFeed.id).label("total"))
+        .join(ActivityFeed, ActivityFeed.user_id == User.id)
+        .filter(ActivityFeed.created_at >= week_ago, User.is_public_profile == True)
+        .group_by(User.id, User.name, User.username, User.avatar_url)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+    return {
+        "popular_coffees": [{"name": name, "total": total} for name, total in popular_coffees],
+        "popular_recipes": [{"id": id_, "title": title, "saves": saves} for id_, title, saves in popular_recipes],
+        "popular_methods": [{"method": method, "total": total} for method, total in popular_methods],
+        "active_users": [{"id": id_, "name": name, "username": username, "avatar_url": avatar_url, "total": total} for id_, name, username, avatar_url, total in active_users],
+        "my_following_count": db.query(Follow).filter(Follow.follower_id == user.id).count(),
+    }
+
+
+@app.get("/api/social/trends")
+async def social_trends(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    await get_current_user(db, token=authorization)
+    return await public_trends(db)
+
+
+# --- ENDPOINTS PÚBLICOS E EXPERIÊNCIA SOCIAL DE CAFÉ ---
+@app.get("/api/public/landing")
+async def public_landing(db: Session = Depends(get_db)):
+    featured_recipes = db.query(PublicRecipe).order_by(desc(PublicRecipe.created_at)).limit(4).all()
+    activities = db.query(ActivityFeed).filter(ActivityFeed.visibility == "public").order_by(desc(ActivityFeed.created_at)).limit(5).all()
+    return {
+        "stats": {
+            "public_baristas": db.query(User).filter(User.is_public_profile == True).count(),
+            "coffees_logged": db.query(Coffee).count(),
+            "recipes_shared": db.query(PublicRecipe).count(),
+            "cups_extracted": db.query(Extraction).count(),
+            "sensory_notes": db.query(SensoryLog).count(),
+        },
+        "featured_recipes": [public_recipe_to_response(db, item).model_dump(mode="json") for item in featured_recipes],
+        "recent_activity": [activity_to_response(db, item).model_dump(mode="json") for item in activities],
+    }
+
+
+@app.get("/api/public/feed", response_model=List[ActivityResponse])
+async def public_feed(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    limit, offset = validate_limit_offset(limit, offset)
+    activities = db.query(ActivityFeed).filter(ActivityFeed.visibility == "public").order_by(desc(ActivityFeed.created_at)).offset(offset).limit(limit).all()
+    return [activity_to_response(db, activity) for activity in activities]
+
+
+@app.get("/api/public/explore")
+async def public_explore(db: Session = Depends(get_db)):
+    popular_coffees = (
+        db.query(CafeTried.coffee_name, func.count(CafeTried.id).label("total"))
+        .group_by(CafeTried.coffee_name)
+        .order_by(desc("total"))
+        .limit(12)
+        .all()
+    )
+    popular_roasteries = (
+        db.query(Coffee.roastery, func.count(Coffee.id).label("total"))
+        .filter(Coffee.roastery.isnot(None))
+        .group_by(Coffee.roastery)
+        .order_by(desc("total"))
+        .limit(12)
+        .all()
+    )
+    popular_origins = (
+        db.query(Coffee.origin, func.count(Coffee.id).label("total"))
+        .filter(Coffee.origin.isnot(None))
+        .group_by(Coffee.origin)
+        .order_by(desc("total"))
+        .limit(12)
+        .all()
+    )
+    popular_methods = (
+        db.query(Recipe.method, func.count(Recipe.id).label("total"))
+        .group_by(Recipe.method)
+        .order_by(desc("total"))
+        .limit(12)
+        .all()
+    )
+    public_recipes = db.query(PublicRecipe).order_by(desc(PublicRecipe.created_at)).limit(8).all()
+    return {
+        "popular_coffees": [{"name": name, "total": total} for name, total in popular_coffees],
+        "popular_roasteries": [{"name": name, "total": total} for name, total in popular_roasteries],
+        "popular_origins": [{"name": name, "total": total} for name, total in popular_origins],
+        "popular_methods": [{"method": method, "total": total} for method, total in popular_methods],
+        "public_recipes": [public_recipe_to_response(db, item).model_dump(mode="json") for item in public_recipes],
+    }
+
+
+@app.get("/api/public/trends")
+async def public_trends(db: Session = Depends(get_db)):
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    active_users = (
+        db.query(User.id, User.name, User.username, User.avatar_url, func.count(ActivityFeed.id).label("total"))
+        .join(ActivityFeed, ActivityFeed.user_id == User.id)
+        .filter(ActivityFeed.created_at >= week_ago, User.is_public_profile == True)
+        .group_by(User.id, User.name, User.username, User.avatar_url)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+    saved_recipes = (
+        db.query(PublicRecipe.id, PublicRecipe.title, func.count(SavedItem.id).label("saves"))
+        .outerjoin(SavedItem, (SavedItem.target_type == "public_recipe") & (SavedItem.target_id == PublicRecipe.id))
+        .group_by(PublicRecipe.id, PublicRecipe.title)
+        .order_by(desc("saves"), desc(PublicRecipe.created_at))
+        .limit(10)
+        .all()
+    )
+    methods = (
+        db.query(Recipe.method, func.count(Recipe.id).label("total"))
+        .group_by(Recipe.method)
+        .order_by(desc("total"))
+        .limit(10)
+        .all()
+    )
+    return {
+        "active_baristas": [{"id": id_, "name": name, "username": username, "avatar_url": avatar_url, "total": total} for id_, name, username, avatar_url, total in active_users],
+        "saved_recipes": [{"id": id_, "title": title, "saves": saves} for id_, title, saves in saved_recipes],
+        "methods": [{"method": method, "total": total} for method, total in methods],
+    }
+
+
+@app.get("/api/public/coffees/{coffee_id}")
+async def public_coffee_page(
+    coffee_id: int,
+    limit: int = Query(12, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    limit, offset = validate_limit_offset(limit, offset, 50)
+    coffee = db.query(Coffee).join(User, Coffee.user_id == User.id).filter(Coffee.id == coffee_id, User.is_public_profile == True).first()
+    if not coffee:
+        raise HTTPException(status_code=404, detail="Café público não encontrado.")
+    ratings = db.query(CoffeeRating).filter(CoffeeRating.coffee_id == coffee.id, CoffeeRating.visibility == "public").order_by(desc(CoffeeRating.created_at)).offset(offset).limit(limit).all()
+    reviews = db.query(CoffeeReview).filter(CoffeeReview.coffee_id == coffee.id, CoffeeReview.visibility == "public").order_by(desc(CoffeeReview.created_at)).offset(offset).limit(limit).all()
+    return {
+        "coffee": CoffeeResponse.model_validate(coffee).model_dump(mode="json"),
+        "owner": public_user(coffee.user).model_dump(mode="json") if coffee.user else None,
+        "ratings": [rating_to_response(item).model_dump(mode="json") for item in ratings],
+        "reviews": [review_to_response(db, item).model_dump(mode="json") for item in reviews],
+        "tried_count": db.query(CafeTried).filter(CafeTried.coffee_name == coffee.name).count(),
+    }
+
+
+@app.get("/api/public/recipes/{public_recipe_id}")
+async def public_recipe_page(public_recipe_id: int, db: Session = Depends(get_db)):
+    item = db.query(PublicRecipe).filter(PublicRecipe.id == public_recipe_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Receita pública não encontrada.")
+    return public_recipe_to_response(db, item).model_dump(mode="json")
+
+
+@app.get("/api/public/roasteries/{roastery}")
+async def public_roastery_page(
+    roastery: str,
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    limit, offset = validate_limit_offset(limit, offset)
+    coffees = db.query(Coffee).join(User, Coffee.user_id == User.id).filter(Coffee.roastery == roastery, User.is_public_profile == True).offset(offset).limit(limit).all()
+    if not coffees:
+        raise HTTPException(status_code=404, detail="Torrefação ainda não possui cafés públicos.")
+    origins = sorted({coffee.origin for coffee in coffees if coffee.origin})
+    return {
+        "name": roastery,
+        "coffees_count": len(coffees),
+        "origins": origins,
+        "coffees": [CoffeeResponse.model_validate(coffee).model_dump(mode="json") for coffee in coffees],
+    }
+
+
+@app.get("/api/public/methods/{method}")
+async def public_method_page(
+    method: str,
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    limit, offset = validate_limit_offset(limit, offset)
+    recipes = db.query(PublicRecipe).join(Recipe, PublicRecipe.recipe_id == Recipe.id).filter(func.lower(Recipe.method) == method.lower()).order_by(desc(PublicRecipe.created_at)).offset(offset).limit(limit).all()
+    return {
+        "method": method,
+        "recipes_count": len(recipes),
+        "public_recipes": [public_recipe_to_response(db, item).model_dump(mode="json") for item in recipes],
+    }
+
+
+@app.get("/api/onboarding/status")
+async def onboarding_status(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    has_stock = db.query(Stock).join(Coffee).filter(Coffee.user_id == user.id, Stock.current_quantity > 0).first() is not None
+    completed = {
+        "first_coffee": db.query(Coffee).filter(Coffee.user_id == user.id).first() is not None,
+        "stock": has_stock,
+        "recipe": db.query(Recipe).filter(Recipe.user_id == user.id).first() is not None,
+        "extraction": db.query(Extraction).filter(Extraction.user_id == user.id).first() is not None,
+        "sensory": db.query(SensoryLog).filter(SensoryLog.user_id == user.id).first() is not None,
+        "public_profile": bool(user.is_public_profile),
+        "wishlist": db.query(CoffeeWishlist).filter(CoffeeWishlist.user_id == user.id).first() is not None,
+        "goal": db.query(CoffeeGoal).filter(CoffeeGoal.user_id == user.id).first() is not None,
+    }
+    steps = [
+        {"key": "first_coffee", "title": "Cadastre seu primeiro café", "href": "#/coffees"},
+        {"key": "stock", "title": "Adicione quantidade em estoque", "href": "#/stock"},
+        {"key": "recipe", "title": "Crie ou escolha uma receita", "href": "#/recipes"},
+        {"key": "extraction", "title": "Registre sua primeira extração", "href": "#/recipes"},
+        {"key": "sensory", "title": "Avalie sensorialmente", "href": "#/sensory"},
+        {"key": "public_profile", "title": "Prepare seu perfil público", "href": "#/profile"},
+        {"key": "wishlist", "title": "Monte sua lista Quero provar", "href": "#/social"},
+        {"key": "goal", "title": "Crie uma meta de preparo", "href": "#/social"},
+    ]
+    done = sum(1 for item in completed.values() if item)
+    return {"completed": completed, "steps": steps, "progress": round(done / len(steps) * 100)}
+
+
+@app.get("/api/auth/me/privacy")
+async def get_privacy_settings(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    return {
+        "profile_visibility": getattr(user, "profile_visibility", "private"),
+        "diary_visibility": getattr(user, "diary_visibility", "private"),
+        "is_public_profile": bool(user.is_public_profile),
+    }
+
+
+@app.put("/api/auth/me/privacy")
+async def update_privacy_settings(
+    payload: dict,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    user = await get_current_user(db, token=authorization)
+    profile_visibility = "public" if payload.get("profile_visibility") == "public" else "private"
+    diary_visibility = "public" if payload.get("diary_visibility") == "public" else "private"
+    user.profile_visibility = profile_visibility
+    user.is_public_profile = profile_visibility == "public"
+    user.diary_visibility = diary_visibility
+    db.commit()
+    db.refresh(user)
+    return {
+        "profile_visibility": user.profile_visibility,
+        "diary_visibility": user.diary_visibility,
+        "is_public_profile": user.is_public_profile,
+    }
 
 @app.post("/api/auth/me/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
@@ -452,7 +1824,10 @@ async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[s
 async def create_coffee(coffee_in: CoffeeCreate, authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
     c = Coffee(**coffee_in.model_dump(), user_id=u.id)
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c)
+    db.flush()
+    create_activity(db, u, "cadastrou", "coffee", c.id, f"{u.name} adicionou {c.name} à biblioteca.")
+    db.commit(); db.refresh(c)
     # Inicializa a ficha de estoque zerada
     stk = Stock(coffee_id=c.id, current_quantity=0.0, min_quantity=50.0)
     db.add(stk); db.commit()
@@ -564,7 +1939,10 @@ async def create_recipe(recipe_in: RecipeCreate, authorization: Annotated[str | 
         c = db.query(Coffee).filter(Coffee.id == recipe_in.coffee_id, Coffee.user_id == u.id).first()
         if not c: raise HTTPException(status_code=400, detail="O café selecionado é inválido.")
     new_recipe = Recipe(**recipe_in.model_dump(), user_id=u.id)
-    db.add(new_recipe); db.commit(); db.refresh(new_recipe)
+    db.add(new_recipe)
+    db.flush()
+    create_activity(db, u, "criou", "recipe", new_recipe.id, f"{u.name} criou a receita {new_recipe.name}.")
+    db.commit(); db.refresh(new_recipe)
     return new_recipe
 
 @app.get("/api/recipes", response_model=List[RecipeResponse])
@@ -604,7 +1982,10 @@ async def duplicate_recipe(recipe_id: int, authorization: Annotated[str | None, 
         coffee_weight=origin.coffee_weight, water_weight=origin.water_weight, grind_size=origin.grind_size,
         water_temp=origin.water_temp, description=origin.description, steps=origin.steps, is_favorite=False
     )
-    db.add(clone); db.commit(); db.refresh(clone)
+    db.add(clone)
+    db.flush()
+    create_activity(db, u, "duplicou", "recipe", clone.id, f"{u.name} duplicou a receita {origin.name}.")
+    db.commit(); db.refresh(clone)
     return clone
 
 #--- ENDPOINTS DO MOTOR INTELIGENTE (FASE 6)
@@ -660,6 +2041,8 @@ async def create_beverage(
     u = await get_current_user(db, token=authorization)
     new_bev = Beverage(**bev.model_dump(), user_id=u.id) # Use .dict() se for Pydantic v1
     db.add(new_bev)
+    db.flush()
+    create_activity(db, u, "publicou bebida", "beverage", new_bev.id, f"{u.name} publicou a bebida autoral {new_bev.name}.")
     db.commit()
     db.refresh(new_bev)
     return new_bev
@@ -966,14 +2349,18 @@ async def ai_chat_unified(
         # 3. Contexto do usuário
         coffees = db.query(Coffee).filter(Coffee.user_id == u.id).all()
         recipes = db.query(Recipe).filter(Recipe.user_id == u.id).all()
+        stock_items = db.query(Stock).join(Coffee).filter(Coffee.user_id == u.id).all()
         extractions = (
-            db.query(Extraction).filter(Extraction.user_id == u.id).all()
+            db.query(Extraction).filter(Extraction.user_id == u.id).order_by(desc(Extraction.extraction_date)).limit(20).all()
+        )
+        sensory_logs = (
+            db.query(SensoryLog).filter(SensoryLog.user_id == u.id).order_by(desc(SensoryLog.created_at)).limit(12).all()
         )
 
         coffees_info = (
             ", ".join(
                 [
-                    f"{c.name} ({c.roastery}, origem: {c.origin}, torra: {c.roast_level})"
+                    f"{c.name} ({c.roastery}, origem: {c.origin}{', torra: ' + c.roast_level if c.roast_level else ''}{', notas: ' + c.sensory_notes if c.sensory_notes else ''})"
                     for c in coffees
                 ]
             )
@@ -981,11 +2368,34 @@ async def ai_chat_unified(
             else "Nenhum café cadastrado."
         )
         recipes_info = (
-            ", ".join([f"{r.name} no método {r.method}" for r in recipes])
+            ", ".join([f"{r.name} no método {r.method}, {r.coffee_weight:g}g para {r.water_weight:g}g" for r in recipes[:20]])
             if recipes
             else "Nenhuma receita."
         )
-        extractions_info = f"Total de extrações: {len(extractions)}"
+        stock_info = (
+            ", ".join([
+                f"{item.coffee.name}: {item.current_quantity:g}g {'aberto/em uso' if item.is_opened else 'fechado'}"
+                for item in stock_items[:20]
+            ])
+            if stock_items
+            else "Nenhum estoque registrado."
+        )
+        extractions_info = (
+            f"Últimas extrações analisadas: {len(extractions)}. "
+            + "; ".join([
+                f"{ext.recipe.name if ext.recipe else 'preparo manual'} ({ext.total_time}s, nota {ext.rating if ext.rating is not None else 'não informada'})"
+                for ext in extractions[:8]
+            ])
+        )
+        sensory_info = (
+            ", ".join([
+                f"{log.perceived_notes} (aroma {log.aroma_score}/10, acidez {log.acidity_score}/10, corpo {log.body_score}/10, doçura {log.sweetness_score}/10)"
+                for log in sensory_logs
+                if log.perceived_notes
+            ])
+            or "Nenhuma preferência sensorial registrada no diário."
+        )
+        profile_preferences = ", ".join(clean_profile_list(getattr(u, "sensory_preferences", None))) or "Nenhuma preferência sensorial no perfil."
 
         system_prompt = (
             f"""
@@ -1036,6 +2446,15 @@ async def ai_chat_unified(
 
             Histórico de extrações:
             {extractions_info}
+
+            Estoque atual:
+            {stock_info}
+
+            Preferências sensoriais do perfil:
+            {profile_preferences}
+
+            Diário sensorial recente:
+            {sensory_info}
 
             ════════════════════════════════════
             REGRAS DE FIDELIDADE AOS DADOS
@@ -1102,8 +2521,7 @@ async def ai_chat_unified(
             Não escreva textos longos sem necessidade.
             Não repita informações que o usuário já forneceu.
 
-            Use emojis com MUITA moderação para melhorar a experiência visual, principalmente:
-            ☕ 🔥 💧 ⚙️ 💡 🔎
+            Use emojis com MUITA moderação. Se usar, no máximo 1 por resposta.
 
             Quando apresentar uma receita, prefira uma estrutura visual semelhante a:
 
@@ -1349,6 +2767,16 @@ async def create_sensory_log(
         comments=payload.comments
     )
     db.add(log)
+    db.flush()
+    coffee = db.query(Coffee).filter(Coffee.id == payload.coffee_id, Coffee.user_id == u.id).first() if payload.coffee_id else None
+    create_activity(
+        db,
+        u,
+        "compartilhou degustação",
+        "sensory",
+        log.id,
+        f"{u.name} registrou uma degustação de {coffee.name if coffee else 'café especial'}.",
+    )
     db.commit()
     db.refresh(log)
     return log
@@ -1444,6 +2872,16 @@ async def record_extraction(ext_in: ExtractionCreate, authorization: Annotated[s
     # Salva o log de extração
     new_ext = Extraction(**ext_in.model_dump(), user_id=u.id)
     db.add(new_ext)
+    db.flush()
+    recipe = db.query(Recipe).filter(Recipe.id == ext_in.recipe_id, Recipe.user_id == u.id).first() if ext_in.recipe_id else None
+    create_activity(
+        db,
+        u,
+        "registrou extração",
+        "extraction",
+        new_ext.id,
+        f"{u.name} registrou uma extração{f' de {recipe.name}' if recipe else ''}.",
+    )
     db.commit()
     db.refresh(new_ext)
     
