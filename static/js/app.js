@@ -105,15 +105,16 @@
         }
 
         function formatApiDetail(detail) {
+            const cleanMessage = (value) => String(value || '').replace(/^Value error,\s*/i, '').trim();
             if (Array.isArray(detail)) {
                 return detail
-                    .map(item => item?.msg || item?.message || String(item))
+                    .map(item => cleanMessage(item?.msg || item?.message || String(item)))
                     .join(' ');
             }
             if (detail && typeof detail === 'object') {
-                return detail.msg || detail.message || JSON.stringify(detail);
+                return cleanMessage(detail.msg || detail.message || JSON.stringify(detail));
             }
-            return detail;
+            return cleanMessage(detail);
         }
 
         function isStrongPassword(password, email = '') {
@@ -2453,7 +2454,10 @@ async function apiFetch(
             }
         });
 
-        document.getElementById('logout-btn')?.addEventListener('click', () => logout());
+        document.getElementById('logout-btn')?.addEventListener('click', (event) => {
+            event.preventDefault();
+            logout();
+        });
 
         // --- FASE 8: HISTÓRICO DE EXTRAÇÕES ---
         async function fetchAndRenderExtractions() {

@@ -18,7 +18,7 @@ from PIL import Image, UnidentifiedImageError
 from jose import jwt, JWTError
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import or_, desc
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from core import (
     Base, engine, get_db, hash_password, verify_password, 
     create_access_token, User, UserCreate, UserLogin, 
@@ -758,6 +758,16 @@ class RenameSessionRequest(BaseModel):
 class AIChatUnifiedRequest(BaseModel):
     session_id: int | None = None
     message: str
+
+    @field_validator("message")
+    @classmethod
+    def message_has_content(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Escreva uma mensagem para o Barista de IA.")
+        if len(cleaned) > 1200:
+            raise ValueError("Mensagem muito longa. Envie até 1200 caracteres.")
+        return cleaned
 
 
 class AIChatSession(Base):
