@@ -54,13 +54,8 @@
         extractions: [],
         sensoryLogs: [],
         filterFav: false,
-        recipeFilterFav: false,
-        socialFeedFilter: 'general',
-        googleLoginEnabled: false,
-        pendingVerificationEmail: ''
+        recipeFilterFav: false
     };
-
-        const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
         const SHARE_THEMES = {
             espresso: ['#3b2418', '#8a4a2d', '#d39a5d'],
@@ -129,67 +124,6 @@
                 /\d/.test(password) &&
                 !['12345', '123456', '12345678', '123456789', 'password', 'senha123', 'abcde', 'abcdef'].includes(password.toLowerCase()) &&
                 (!emailUser || !password.toLowerCase().includes(emailUser));
-        }
-
-        function parseCommaList(value) {
-            return String(value || '')
-                .split(',')
-                .map(item => item.trim())
-                .filter(Boolean)
-                .slice(0, 12);
-        }
-
-        function formatCommaList(values) {
-            return Array.isArray(values) ? values.join(', ') : '';
-        }
-
-        function formatDate(value) {
-            if (!value) return 'agora';
-            const date = new Date(value);
-            if (Number.isNaN(date.getTime())) return 'agora';
-            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-        }
-
-        function escapeHTML(value) {
-            return String(value ?? '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#039;');
-        }
-
-        function createElement(tag, options = {}, children = []) {
-            const node = document.createElement(tag);
-            if (options.className) node.className = options.className;
-            if (options.text !== undefined) node.textContent = options.text;
-            if (options.html !== undefined) node.innerHTML = options.html;
-            if (options.attrs) {
-                Object.entries(options.attrs).forEach(([key, value]) => {
-                    if (value !== undefined && value !== null) node.setAttribute(key, String(value));
-                });
-            }
-            if (options.dataset) {
-                Object.entries(options.dataset).forEach(([key, value]) => {
-                    if (value !== undefined && value !== null) node.dataset[key] = String(value);
-                });
-            }
-            children.filter(Boolean).forEach(child => {
-                node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
-            });
-            return node;
-        }
-
-        function setChildren(container, children) {
-            if (!container) return;
-            container.replaceChildren(...children.filter(Boolean));
-        }
-
-        function createEmptyState(title, copy) {
-            return createElement('div', { className: 'card social-empty' }, [
-                createElement('strong', { text: title }),
-                createElement('p', { text: copy })
-            ]);
         }
 
         function updatePasswordHint(inputId, hintId, emailId) {
@@ -1436,82 +1370,25 @@ async function apiFetch(
                 profileEmailDisplay.innerText = user.email;
             }
             const profileNameInput = document.getElementById('profile-name');
-            const profileUsernameInput = document.getElementById('profile-username');
             const profileBioInput = document.getElementById('profile-bio');
-            const profileCityInput = document.getElementById('profile-city');
-            const profileCountryInput = document.getElementById('profile-country');
-            const profileMethodsInput = document.getElementById('profile-favorite-methods');
-            const profileRoasteriesInput = document.getElementById('profile-favorite-roasteries');
-            const profileSensoryInput = document.getElementById('profile-sensory-preferences');
-            const profileMasteredInput = document.getElementById('profile-mastered-methods');
-            const profileDiaryVisibility = document.getElementById('profile-diary-visibility');
-            const setupGrinderInput = document.getElementById('profile-setup-grinder');
-            const setupKettleInput = document.getElementById('profile-setup-kettle');
-            const setupScaleInput = document.getElementById('profile-setup-scale');
-            const setupBrewersInput = document.getElementById('profile-setup-brewers');
-            const profilePublicToggle = document.getElementById('profile-public-toggle');
-            const googleStatus = document.getElementById('profile-google-status');
-            const googleProfileArea = document.getElementById('google-profile-area');
-            const disconnectGoogleBtn = document.getElementById('disconnect-google-btn');
-            const currentPasswordGroup = document.getElementById('profile-current-password-group');
-            const currentPasswordInput = document.getElementById('profile-current-password');
-            const passwordCopy = document.getElementById('profile-password-copy');
             if (profileNameInput && user?.name) {
                 profileNameInput.value = user.name;
-            }
-            if (profileUsernameInput) {
-                profileUsernameInput.value = user?.username || '';
             }
             if (profileBioInput && user?.bio !== undefined && user?.bio !== null) {
                 profileBioInput.value = user.bio;
             }
-            if (profileCityInput) profileCityInput.value = user?.city || '';
-            if (profileCountryInput) profileCountryInput.value = user?.country || '';
-            if (profileMethodsInput) profileMethodsInput.value = formatCommaList(user?.favorite_methods);
-            if (profileRoasteriesInput) profileRoasteriesInput.value = formatCommaList(user?.favorite_roasteries);
-            if (profileSensoryInput) profileSensoryInput.value = formatCommaList(user?.sensory_preferences);
-            if (profileMasteredInput) profileMasteredInput.value = formatCommaList(user?.mastered_methods);
-            if (profileDiaryVisibility) profileDiaryVisibility.value = user?.diary_visibility || 'private';
-            if (setupGrinderInput) setupGrinderInput.value = user?.barista_setup?.grinder || '';
-            if (setupKettleInput) setupKettleInput.value = user?.barista_setup?.kettle || '';
-            if (setupScaleInput) setupScaleInput.value = user?.barista_setup?.scale || '';
-            if (setupBrewersInput) setupBrewersInput.value = user?.barista_setup?.brewers || '';
-            if (profilePublicToggle) profilePublicToggle.checked = Boolean(user?.is_public_profile);
-            if (googleStatus) {
-                googleStatus.innerText = user?.google_connected
-                    ? 'Conta conectada ao Google.'
-                    : 'Conta ainda não conectada ao Google.';
-            }
-            if (disconnectGoogleBtn) {
-                const canDisconnect = Boolean(user?.google_connected && user?.password_login_enabled);
-                disconnectGoogleBtn.classList.toggle('hidden', !canDisconnect);
-            }
-            if (googleProfileArea) {
-                googleProfileArea.classList.toggle(
-                    'hidden',
-                    !state.googleLoginEnabled || Boolean(user?.google_connected)
-                );
-            }
-            if (currentPasswordGroup && currentPasswordInput) {
-                const needsCurrentPassword = user?.password_login_enabled !== false;
-                currentPasswordGroup.classList.toggle('hidden', !needsCurrentPassword);
-                currentPasswordInput.required = needsCurrentPassword;
-                if (!needsCurrentPassword) currentPasswordInput.value = '';
-            }
-            if (passwordCopy) {
-                passwordCopy.innerText = user?.password_login_enabled === false
-                    ? 'Defina uma senha para também entrar com e-mail e poder desconectar o Google.'
-                    : 'Altere sua senha mantendo o acesso protegido.';
-            }
+
+            // SVG genérico embutido em base64 que funciona 100% offline
+            const defaultAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
             avatarImgs.forEach((avatarImg) => {
                 avatarImg.onerror = () => {
-                    avatarImg.src = DEFAULT_AVATAR;
+                    avatarImg.src = defaultAvatar;
                 };
 
                 avatarImg.src = user?.avatar_url
                     ? user.avatar_url
-                    : DEFAULT_AVATAR;
+                    : defaultAvatar;
             });
             }
 
@@ -1519,35 +1396,24 @@ async function apiFetch(
             const currentView = location.hash.replace('#', '').replace('/', '') || 'dashboard';
             if (!state.token || currentView !== 'dashboard') return;
             try {
-                const [coffeesData, stockData, recipesData, extractionsData, sensoryData] = await Promise.all([
+                const [coffeesData, stockData, recipesData, extractionsData] = await Promise.all([
                     apiFetch('/api/coffees').catch(() => []),
                     apiFetch('/api/stock').catch(() => []),
                     apiFetch('/api/recipes').catch(() => []),
                     apiFetch('/api/extractions').catch(() => []),
-                    apiFetch('/api/sensory-logs').catch(() => []),
                 ]);
 
                 const coffees = Array.isArray(coffeesData) ? coffeesData : [];
                 const stock = Array.isArray(stockData) ? stockData : [];
                 const recipes = Array.isArray(recipesData) ? recipesData : [];
                 const extractions = Array.isArray(extractionsData) ? extractionsData : [];
-                const sensory = Array.isArray(sensoryData) ? sensoryData : [];
                 const todayKey = new Date().toISOString().slice(0, 10);
-                const weekStart = new Date();
-                weekStart.setDate(weekStart.getDate() - 6);
-                weekStart.setHours(0, 0, 0, 0);
                 const todayExtractions = extractions.filter(ext => {
                     const rawDate = ext.extraction_date || ext.created_at;
                     return rawDate && new Date(rawDate).toISOString().slice(0, 10) === todayKey;
                 });
-                const weekExtractions = extractions.filter(ext => {
-                    const rawDate = ext.extraction_date || ext.created_at;
-                    return rawDate && new Date(rawDate) >= weekStart;
-                });
                 const lowStock = stock.filter(item => Number(item.current_quantity || 0) <= Number(item.min_quantity || 0));
                 const favoriteCoffee = coffees.find(c => c.is_favorite) || coffees[0];
-                const coffeeOfDay = favoriteCoffee || coffees.find(c => c.sca_score) || coffees[0];
-                const lastSensory = sensory[0];
 
                 const setText = (id, value) => {
                     const el = document.getElementById(id);
@@ -1565,39 +1431,6 @@ async function apiFetch(
                 setText('dashboard-fav-coffee', favoriteCoffee ? favoriteCoffee.name : 'Cadastre seu primeiro grao');
                 setText('dashboard-low-stock', `${lowStock.length} item${lowStock.length === 1 ? '' : 's'}`);
                 setText('dashboard-recipes-count', String(recipes.length));
-                setText('dashboard-coffee-day', coffeeOfDay ? coffeeOfDay.name : 'Escolha seu primeiro grão');
-                setText('dashboard-coffee-day-copy', coffeeOfDay
-                    ? `${coffeeOfDay.roastery || 'Torrefação não informada'} · ${coffeeOfDay.origin || 'origem livre'}${coffeeOfDay.sensory_notes ? ` · ${coffeeOfDay.sensory_notes}` : ''}`
-                    : 'Cadastre um café especial para receber recomendações de preparo.');
-                setText('dashboard-week-progress', `${weekExtractions.length} preparo${weekExtractions.length === 1 ? '' : 's'}`);
-                setText('dashboard-week-progress-copy', weekExtractions.length >= 5
-                    ? 'Semana consistente. Seu histórico já tem sinais interessantes.'
-                    : `Faltam ${Math.max(0, 5 - weekExtractions.length)} para bater a meta sugerida.`);
-                const weekBar = document.getElementById('dashboard-week-progress-bar');
-                if (weekBar) weekBar.style.width = `${Math.min(100, (weekExtractions.length / 5) * 100)}%`;
-                setText('dashboard-last-sensory', lastSensory?.coffee?.name || 'Sem degustações ainda');
-                setText('dashboard-last-sensory-copy', lastSensory
-                    ? `Aroma ${lastSensory.aroma_score}/10 · Corpo ${lastSensory.body_score}/10 · ${lastSensory.perceived_notes || 'sem notas descritas'}`
-                    : 'Avalie aroma, corpo, acidez e doçura para acompanhar sua evolução.');
-                setText('dashboard-social-title', state.user?.is_public_profile ? `@${state.user.username || 'perfil'}` : 'Perfil pronto para compartilhar');
-                setText('dashboard-social-copy', state.user?.is_public_profile
-                    ? 'Seu perfil público já está preparado para a futura camada social.'
-                    : 'Ative seu perfil público para preparar a futura comunidade Coffee Lab.');
-                const onboardingState = {
-                    coffee: coffees.length > 0,
-                    stock: stock.some(item => Number(item.current_quantity || 0) > 0),
-                    recipe: recipes.length > 0,
-                    extraction: extractions.length > 0,
-                    sensory: sensory.length > 0
-                };
-                document.querySelectorAll('#dashboard-onboarding-steps .onboarding-step').forEach(step => {
-                    const key = step.dataset.step;
-                    const done = Boolean(onboardingState[key]);
-                    step.classList.toggle('done', done);
-                    const badge = step.querySelector('span');
-                    if (badge && !badge.dataset.number) badge.dataset.number = badge.textContent;
-                    if (badge) badge.textContent = done ? 'OK' : badge.dataset.number;
-                });
 
                 if (lowStock.length > 0) {
                     setText('dashboard-next-title', 'Revise o estoque antes do proximo preparo');
@@ -1618,287 +1451,6 @@ async function apiFetch(
                 }
             } catch (err) {
                 console.warn('Dashboard indisponivel:', err);
-            }
-        }
-
-        async function fetchAndRenderSocial() {
-            if (!state.token || location.hash !== '#/social') return;
-            try {
-                const [feed, publicRecipes, wishlist, goals, recipes, explore] = await Promise.all([
-                    apiFetch(`/api/social/feed?filter=${encodeURIComponent(state.socialFeedFilter)}`).catch(() => []),
-                    apiFetch('/api/social/public-recipes').catch(() => []),
-                    apiFetch('/api/social/wishlist').catch(() => []),
-                    apiFetch('/api/social/goals').catch(() => []),
-                    apiFetch('/api/recipes').catch(() => []),
-                    apiFetch('/api/social/explore').catch(() => ({}))
-                ]);
-                renderSocialFeed(Array.isArray(feed) ? feed : []);
-                renderPublicRecipes(Array.isArray(publicRecipes) ? publicRecipes : []);
-                renderSocialWishlist(Array.isArray(wishlist) ? wishlist : []);
-                renderSocialGoals(Array.isArray(goals) ? goals : []);
-                renderSocialRecipeSelect(Array.isArray(recipes) ? recipes : []);
-                renderSocialExplore(explore || {});
-            } catch (err) {
-                showToast(err.message || 'Comunidade indisponível agora.', 'error');
-            }
-        }
-
-        function renderLandingStat(value, label) {
-            return createElement('span', {}, [
-                createElement('strong', { text: value }),
-                document.createTextNode(` ${label}`)
-            ]);
-        }
-
-        function renderPublicRecipeCard(item) {
-            return createElement('div', { className: 'social-list-item public-recipe-card' }, [
-                createElement('div', {}, [
-                    createElement('strong', { text: item.title || 'Receita pública' }),
-                    createElement('span', { text: `${item.user?.name || 'Barista'} · ${item.recipe?.method || 'Método livre'}` })
-                ]),
-                createElement('button', { text: 'Copiar', attrs: { type: 'button' }, dataset: { copyPublicRecipe: item.id } })
-            ]);
-        }
-
-        function renderCoffeeMiniCard(item, subtitle) {
-            return createElement('div', { className: 'social-list-item coffee-mini-card' }, [
-                createElement('div', {}, [
-                    createElement('strong', { text: item.coffee_name || item.name || 'Café especial' }),
-                    createElement('span', { text: subtitle || item.origin || 'Origem livre' })
-                ])
-            ]);
-        }
-
-        function renderGoalCard(item) {
-            const percent = Math.min(100, Math.round((Number(item.current_value || 0) / Number(item.target_value || 1)) * 100));
-            const bar = createElement('i');
-            bar.style.width = `${percent}%`;
-            return createElement('div', { className: 'social-goal-item' }, [
-                createElement('strong', { text: item.title || 'Meta de preparo' }),
-                createElement('span', { text: `${item.current_value || 0}/${item.target_value || 0}` }),
-                createElement('div', {}, [bar])
-            ]);
-        }
-
-        function renderRankingBlock(title, items, format) {
-            return createElement('div', { className: 'social-ranking-block' }, [
-                createElement('strong', { text: title }),
-                ...(items.length
-                    ? items.slice(0, 4).map(item => createElement('span', { text: format(item) }))
-                    : [createElement('span', { text: 'Aguardando movimento.' })])
-            ]);
-        }
-
-        function renderSocialFeed(items) {
-            const list = document.getElementById('social-feed-list');
-            if (!list) return;
-            if (!items.length) {
-                setChildren(list, [createEmptyState('Nada por aqui ainda.', 'Publique um preparo, compartilhe uma receita ou siga alguém para movimentar seu feed.')]);
-                return;
-            }
-            setChildren(list, items.map(item => renderActivityCard(item)));
-        }
-
-        function renderPublicRecipes(items) {
-            const list = document.getElementById('social-public-recipes');
-            if (!list) return;
-            if (!items.length) {
-                setChildren(list, [createElement('p', { className: 'social-muted', text: 'Nenhuma receita pública ainda.' })]);
-                return;
-            }
-            setChildren(list, items.slice(0, 6).map(item => renderPublicRecipeCard(item)));
-        }
-
-        function renderSocialWishlist(items) {
-            const list = document.getElementById('social-wishlist-list');
-            if (!list) return;
-            setChildren(list, items.length
-                ? items.slice(0, 5).map(item => renderCoffeeMiniCard(item, item.roastery || 'Torrefação livre'))
-                : [createElement('p', { className: 'social-muted', text: 'Monte sua lista de cafés para provar.' })]);
-        }
-
-        function renderSocialGoals(items) {
-            const list = document.getElementById('social-goals-list');
-            if (!list) return;
-            setChildren(list, items.length
-                ? items.slice(0, 5).map(item => renderGoalCard(item))
-                : [createElement('p', { className: 'social-muted', text: 'Crie uma meta mensal ou anual.' })]);
-        }
-
-        function renderSocialRecipeSelect(items) {
-            const select = document.getElementById('social-share-recipe-select');
-            if (!select) return;
-            select.replaceChildren();
-            if (!items.length) {
-                select.appendChild(createElement('option', { text: 'Crie uma receita primeiro', attrs: { value: '' } }));
-                return;
-            }
-            items.forEach(recipe => {
-                select.appendChild(createElement('option', { text: recipe.name, attrs: { value: recipe.id } }));
-            });
-        }
-
-        function renderSocialExplore(data) {
-            const box = document.getElementById('social-rankings');
-            if (!box) return;
-            const sections = [
-                ['Cafés mais provados', data.popular_coffees || [], item => `${item.name} · ${item.total}`],
-                ['Receitas mais salvas', data.popular_recipes || [], item => `${item.title} · ${item.saves}`],
-                ['Métodos mais usados', data.popular_methods || [], item => `${item.method} · ${item.total}`],
-                ['Usuários ativos', data.active_users || [], item => `${item.name} · ${item.total}`],
-            ];
-            setChildren(box, sections.map(([title, items, format]) => renderRankingBlock(title, items, format)));
-        }
-
-        async function fetchAndRenderPublicLanding() {
-            const box = document.getElementById('public-landing-stats');
-            if (!box) return;
-            try {
-                const data = await apiFetch('/api/public/landing');
-                const stats = data.stats || {};
-                setChildren(box, [
-                    renderLandingStat(stats.public_baristas || 0, 'baristas'),
-                    renderLandingStat(stats.coffees_logged || 0, 'cafés'),
-                    renderLandingStat(stats.recipes_shared || 0, 'receitas')
-                ]);
-            } catch {
-                setChildren(box, [
-                    renderLandingStat('+', 'cafés'),
-                    renderLandingStat('+', 'receitas'),
-                    renderLandingStat('+', 'comunidade')
-                ]);
-            }
-        }
-
-        async function fetchAndRenderFeedPage() {
-            const list = document.getElementById('feed-page-list');
-            if (!list) return;
-            try {
-                const items = await apiFetch('/api/public/feed');
-                setChildren(list, Array.isArray(items) && items.length
-                    ? items.map(item => renderActivityCard(item))
-                    : [createEmptyState('Feed pronto para ganhar vida.', 'As atividades públicas aparecem aqui quando a comunidade começa a provar, salvar e compartilhar cafés.')]);
-            } catch (err) {
-                setChildren(list, [createEmptyState('Feed indisponível.', err.message || 'Tente novamente em instantes.')]);
-            }
-        }
-
-        function renderActivityCard(item) {
-            const avatar = createElement('img', {
-                attrs: { src: item.user?.avatar_url || DEFAULT_AVATAR, alt: item.user?.name || 'Perfil' }
-            });
-            const header = createElement('div', { className: 'social-card-header' }, [
-                avatar,
-                createElement('div', {}, [
-                    createElement('strong', { text: item.user?.name || 'Barista' }),
-                    createElement('span', { text: `@${item.user?.username || 'coffee'} · ${formatDate(item.created_at)}` })
-                ])
-            ]);
-            const actions = createElement('div', { className: 'social-card-actions' }, [
-                createElement('button', { text: `${item.liked_by_me ? 'Curtido' : 'Curtir'} · ${item.likes_count || 0}`, attrs: { type: 'button' }, dataset: { socialLike: `activity:${item.id}` } }),
-                createElement('button', { text: `Comentar · ${item.comments_count || 0}`, attrs: { type: 'button' }, dataset: { socialComment: `activity:${item.id}` } })
-            ]);
-            return createElement('article', { className: 'card social-feed-card', dataset: { targetType: 'activity', targetId: item.id } }, [
-                header,
-                createElement('p', { text: item.summary }),
-                actions
-            ]);
-        }
-
-        function renderDiscoverySection(title, items, format) {
-            return createElement('div', { className: 'card social-panel discovery-card' }, [
-                createElement('h3', { text: title }),
-                createElement('div', { className: 'social-compact-list' }, items?.length
-                    ? items.map(item => {
-                        const formatted = format(item);
-                        return createElement('div', { className: 'social-list-item' }, [
-                            createElement('div', {}, [
-                                createElement('strong', { text: formatted.title }),
-                                createElement('span', { text: formatted.subtitle })
-                            ])
-                        ]);
-                    })
-                    : [createElement('p', { className: 'social-muted', text: 'Aguardando dados da comunidade.' })])
-            ]);
-        }
-
-        async function fetchAndRenderExplorePage() {
-            const grid = document.getElementById('explore-grid');
-            if (!grid) return;
-            try {
-                const data = await apiFetch('/api/public/explore');
-                setChildren(grid, [
-                    renderDiscoverySection('Quero provar / Provado', data.popular_coffees || [], item => ({ title: item.name, subtitle: `${item.total} provas registradas` })),
-                    renderDiscoverySection('Torrefações exploradas', data.popular_roasteries || [], item => ({ title: item.name, subtitle: `${item.total} cafés cadastrados` })),
-                    renderDiscoverySection('Origens exploradas', data.popular_origins || [], item => ({ title: item.name, subtitle: `${item.total} registros` })),
-                    renderDiscoverySection('Métodos em alta', data.popular_methods || [], item => ({ title: item.method, subtitle: `${item.total} receitas` })),
-                    renderDiscoverySection('Receitas salvas', data.public_recipes || [], item => ({ title: item.title, subtitle: `${item.user?.name || 'Barista'} · ${item.recipe?.method || 'método livre'}` })),
-                ]);
-            } catch (err) {
-                setChildren(grid, [createEmptyState('Explorar indisponível.', err.message || 'Tente novamente em instantes.')]);
-            }
-        }
-
-        async function fetchAndRenderTrendsPage() {
-            const grid = document.getElementById('trends-grid');
-            if (!grid) return;
-            try {
-                const data = await apiFetch('/api/public/trends');
-                setChildren(grid, [
-                    renderDiscoverySection('Baristas ativos da semana', data.active_baristas || [], item => ({ title: item.name, subtitle: `${item.total} atividades públicas` })),
-                    renderDiscoverySection('Receitas mais salvas', data.saved_recipes || [], item => ({ title: item.title, subtitle: `${item.saves} salvamentos` })),
-                    renderDiscoverySection('Métodos mais usados', data.methods || [], item => ({ title: item.method, subtitle: `${item.total} receitas registradas` })),
-                ]);
-            } catch (err) {
-                setChildren(grid, [createEmptyState('Tendências indisponíveis.', err.message || 'Tente novamente em instantes.')]);
-            }
-        }
-
-        async function fetchAndRenderOnboardingPage() {
-            const grid = document.getElementById('onboarding-page-steps');
-            const pill = document.getElementById('onboarding-progress-pill');
-            if (!grid) return;
-            try {
-                const data = await apiFetch('/api/onboarding/status');
-                if (pill) pill.innerText = `${data.progress || 0}%`;
-                setChildren(grid, (data.steps || []).map((step, index) => {
-                    const done = Boolean(data.completed?.[step.key]);
-                    return createElement('a', { className: `card onboarding-page-step ${done ? 'done' : ''}`, attrs: { href: step.href || '#/dashboard' } }, [
-                        createElement('span', { text: done ? 'OK' : index + 1 }),
-                        createElement('strong', { text: step.title }),
-                        createElement('small', { text: done ? 'Concluído' : 'Próximo passo' })
-                    ]);
-                }));
-            } catch (err) {
-                setChildren(grid, [createEmptyState('Onboarding indisponível.', err.message || 'Tente novamente em instantes.')]);
-            }
-        }
-
-        async function fetchAndRenderPrivacyPage() {
-            try {
-                const data = await apiFetch('/api/auth/me/privacy');
-                const profile = document.getElementById('privacy-profile');
-                const diary = document.getElementById('privacy-diary');
-                if (profile) profile.value = data.profile_visibility || 'private';
-                if (diary) diary.value = data.diary_visibility || 'private';
-            } catch (err) {
-                showToast(err.message || 'Privacidade indisponível agora.', 'error');
-            }
-        }
-
-        async function renderPublicDetail(endpoint, title) {
-            const box = document.getElementById('public-detail-result');
-            if (!box) return;
-            try {
-                const data = await apiFetch(endpoint);
-                setChildren(box, [
-                    createElement('div', { className: 'card public-detail-card' }, [
-                        createElement('span', { className: 'dashboard-kicker', text: title }),
-                        createElement('pre', { text: JSON.stringify(data, null, 2) })
-                    ])
-                ]);
-            } catch (err) {
-                setChildren(box, [createEmptyState('Não encontrado.', err.message || 'Confira os dados e tente novamente.')]);
             }
         }
 
@@ -2559,7 +2111,6 @@ async function apiFetch(
             const forms = {
                 login: document.getElementById('login-form'),
                 register: document.getElementById('register-form'),
-                postRegister: document.getElementById('post-register-panel'),
                 recover: document.getElementById('recover-form'),
                 resend: document.getElementById('resend-verification-form'),
                 reset: document.getElementById('reset-password-form')
@@ -2572,7 +2123,6 @@ async function apiFetch(
                 subtitle.innerText = {
                     login: 'Entre na sua conta para acessar seus cafés e receitas',
                     register: 'Crie sua conta para começar seu laboratório de cafés',
-                    postRegister: 'Falta só confirmar seu e-mail para liberar sua conta',
                     recover: 'Informe seu e-mail para receber instruções de recuperação',
                     resend: 'Receba um novo link para confirmar seu e-mail',
                     reset: 'Crie uma nova senha segura para sua conta'
@@ -2611,38 +2161,13 @@ async function apiFetch(
         }
 
         async function initGoogleLogin() {
-            const targets = [
-                {
-                    area: document.getElementById('google-login-area'),
-                    button: document.getElementById('google-login-button'),
-                    text: 'continue_with',
-                    mode: 'login'
-                },
-                {
-                    area: document.getElementById('google-register-area'),
-                    button: document.getElementById('google-register-button'),
-                    text: 'signup_with',
-                    mode: 'register'
-                },
-                {
-                    area: document.getElementById('google-profile-area'),
-                    button: document.getElementById('google-profile-button'),
-                    text: 'continue_with',
-                    mode: 'profile'
-                }
-            ].filter(target => target.area && target.button);
-            if (!targets.length) return;
+            const area = document.getElementById('google-login-area');
+            const button = document.getElementById('google-login-button');
+            if (!area || !button) return;
 
             try {
                 const config = await apiFetch('/api/auth/config');
-                if (!config.google_client_id) {
-                    state.googleLoginEnabled = false;
-                    targets.forEach(target => target.area.classList.add('hidden'));
-                    updateUserDOM();
-                    return;
-                }
-                state.googleLoginEnabled = true;
-                updateUserDOM();
+                if (!config.google_client_id) return;
 
                 const render = () => {
                     if (!window.google?.accounts?.id) {
@@ -2653,39 +2178,24 @@ async function apiFetch(
                         client_id: config.google_client_id,
                         callback: async (response) => {
                             try {
-                                const connectProfile =
-                                    state.token &&
-                                    location.hash.includes('/profile') &&
-                                    state.user?.google_connected === false;
-                                const result = await apiFetch(connectProfile ? '/api/auth/me/google' : '/api/auth/google', {
+                                const result = await apiFetch('/api/auth/google', {
                                     method: 'POST',
                                     body: { credential: response.credential }
                                 });
-                                if (connectProfile) {
-                                    state.user = result;
-                                    localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
-                                    updateUserDOM();
-                                    showToast('Google conectado à sua conta.');
-                                } else {
-                                    saveSession(result.access_token, result.user);
-                                    showToast('Entrada com Google realizada!');
-                                }
+                                saveSession(result.access_token, result.user);
+                                showToast('Login com Google realizado!');
                             } catch (err) {
                                 showToast(err.message, 'error');
                             }
                         }
                     });
-
-                    targets.forEach(target => {
-                        target.button.innerHTML = '';
-                        window.google.accounts.id.renderButton(target.button, {
-                            theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
-                            size: 'large',
-                            width: 320,
-                            text: target.text
-                        });
-                        target.area.classList.remove('hidden');
+                    window.google.accounts.id.renderButton(button, {
+                        theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
+                        size: 'large',
+                        width: 320,
+                        text: 'continue_with'
                     });
+                    area.classList.remove('hidden');
                 };
 
                 render();
@@ -2727,45 +2237,6 @@ async function apiFetch(
         document.getElementById('go-to-resend-verification')?.addEventListener('click', (e) => {
             e.preventDefault();
             showAuthForm('resend');
-        });
-
-        function showPostRegister(email, result = {}) {
-            state.pendingVerificationEmail = email;
-            const copy = document.getElementById('post-register-copy');
-            const devLink = document.getElementById('post-register-dev-link');
-            if (copy) {
-                copy.innerText = `Enviamos um link para ${email}. Confirme seu e-mail para entrar no Coffee Lab.`;
-            }
-            if (devLink) {
-                devLink.classList.toggle('hidden', !result.dev_verification_url);
-                if (result.dev_verification_url) devLink.href = result.dev_verification_url;
-            }
-            showAuthForm('postRegister');
-        }
-
-        document.getElementById('post-register-back-login')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            showAuthForm('login');
-        });
-
-        document.getElementById('post-register-resend')?.addEventListener('click', async () => {
-            const email = state.pendingVerificationEmail || document.getElementById('reg-email')?.value.trim();
-            if (!email) {
-                showToast('Informe seu e-mail para reenviar a verificação.', 'error');
-                showAuthForm('resend');
-                return;
-            }
-
-            try {
-                const result = await apiFetch('/api/auth/resend-verification', {
-                    method: 'POST',
-                    body: { email }
-                });
-                showToast(result.detail || 'Se houver pendência, enviaremos um novo link.');
-                showPostRegister(email, result);
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
         });
 
         document.getElementById('reg-password')?.addEventListener('input', () =>
@@ -2810,7 +2281,12 @@ async function apiFetch(
                     body: { name, email, password }
                 });
                 showToast(result.detail || 'Conta criada. Verifique seu e-mail.');
-                showPostRegister(email, result);
+                if (result.dev_verification_url) {
+                    window.location.href = result.dev_verification_url;
+                    return;
+                }
+                showAuthForm('login');
+                document.getElementById('login-email').value = email;
             } catch (err) {
                 showToast(err.message, 'error');
             }
@@ -2901,22 +2377,7 @@ async function apiFetch(
                     method: 'PUT',
                     body: {
                         name: document.getElementById('profile-name').value.trim(),
-                        username: document.getElementById('profile-username').value.trim(),
-                        bio: document.getElementById('profile-bio').value,
-                        city: document.getElementById('profile-city').value.trim(),
-                        country: document.getElementById('profile-country').value.trim(),
-                        favorite_methods: parseCommaList(document.getElementById('profile-favorite-methods').value),
-                        favorite_roasteries: parseCommaList(document.getElementById('profile-favorite-roasteries').value),
-                        sensory_preferences: parseCommaList(document.getElementById('profile-sensory-preferences').value),
-                        mastered_methods: parseCommaList(document.getElementById('profile-mastered-methods').value),
-                        diary_visibility: document.getElementById('profile-diary-visibility').value,
-                        barista_setup: {
-                            grinder: document.getElementById('profile-setup-grinder').value.trim(),
-                            kettle: document.getElementById('profile-setup-kettle').value.trim(),
-                            scale: document.getElementById('profile-setup-scale').value.trim(),
-                            brewers: document.getElementById('profile-setup-brewers').value.trim()
-                        },
-                        is_public_profile: document.getElementById('profile-public-toggle').checked
+                        bio: document.getElementById('profile-bio').value
                     }
                 });
                 if (isQueuedResponse(result)) {
@@ -2961,28 +2422,7 @@ async function apiFetch(
                 });
                 document.getElementById('profile-password-form').reset();
                 updatePasswordHint('profile-new-password', 'profile-password-hint');
-                state.user = await apiFetch('/api/auth/me');
-                localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
-                updateUserDOM();
                 showToast(result.detail || 'Senha alterada com sucesso.');
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('disconnect-google-btn')?.addEventListener('click', async () => {
-            if (!navigator.onLine) {
-                showToast('Desconectar Google precisa de conexão com a internet.', 'error');
-                return;
-            }
-            if (!confirm('Desconectar o Google desta conta? Você continuará acessando com e-mail e senha.')) return;
-
-            try {
-                const result = await apiFetch('/api/auth/me/google', { method: 'DELETE' });
-                state.user = result;
-                localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
-                updateUserDOM();
-                showToast('Google desconectado da conta.');
             } catch (err) {
                 showToast(err.message, 'error');
             }
@@ -3014,175 +2454,6 @@ async function apiFetch(
         });
 
         document.getElementById('logout-btn')?.addEventListener('click', () => logout());
-
-        document.getElementById('social-feed-filters')?.addEventListener('click', async (event) => {
-            const button = event.target.closest('button[data-filter]');
-            if (!button) return;
-            state.socialFeedFilter = button.dataset.filter || 'general';
-            document.querySelectorAll('#social-feed-filters button').forEach(item => {
-                item.classList.toggle('active', item === button);
-            });
-            await fetchAndRenderSocial();
-        });
-
-        document.getElementById('social-post-form')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const content = document.getElementById('social-post-content').value.trim();
-            const visibility = document.getElementById('social-post-visibility').value;
-            if (!content) return;
-            try {
-                await apiFetch('/api/social/posts', { method: 'POST', body: { content, visibility } });
-                event.target.reset();
-                showToast('Publicado na comunidade.');
-                await fetchAndRenderSocial();
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('social-share-recipe-btn')?.addEventListener('click', async () => {
-            const recipeId = document.getElementById('social-share-recipe-select')?.value;
-            if (!recipeId) {
-                showToast('Crie uma receita antes de compartilhar.', 'error');
-                return;
-            }
-            try {
-                await apiFetch(`/api/social/recipes/${recipeId}/share`, { method: 'POST' });
-                showToast('Receita compartilhada publicamente.');
-                await fetchAndRenderSocial();
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('social-wishlist-form')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const coffee_name = document.getElementById('wishlist-coffee-name').value.trim();
-            const roastery = document.getElementById('wishlist-roastery').value.trim();
-            if (!coffee_name) return;
-            try {
-                await apiFetch('/api/social/wishlist', { method: 'POST', body: { coffee_name, roastery } });
-                event.target.reset();
-                showToast('Café adicionado ao Quero provar.');
-                await fetchAndRenderSocial();
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('social-goal-form')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const title = document.getElementById('social-goal-title').value.trim();
-            const target_value = Number(document.getElementById('social-goal-target').value || 0);
-            const goal_type = document.getElementById('social-goal-type').value;
-            if (!title || target_value <= 0) return;
-            try {
-                await apiFetch('/api/social/goals', { method: 'POST', body: { title, target_value, goal_type, period: 'monthly' } });
-                event.target.reset();
-                showToast('Meta criada.');
-                await fetchAndRenderSocial();
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('view-social')?.addEventListener('click', async (event) => {
-            const likeButton = event.target.closest('[data-social-like]');
-            const copyButton = event.target.closest('[data-copy-public-recipe]');
-            const commentButton = event.target.closest('[data-social-comment]');
-            try {
-                if (likeButton) {
-                    const [type, id] = likeButton.dataset.socialLike.split(':');
-                    await apiFetch(`/api/social/${type}/${id}/like`, { method: 'POST' });
-                    await fetchAndRenderSocial();
-                }
-                if (copyButton) {
-                    await apiFetch(`/api/social/public-recipes/${copyButton.dataset.copyPublicRecipe}/copy`, { method: 'POST' });
-                    showToast('Receita copiada para sua biblioteca.');
-                    await fetchAndRenderSocial();
-                }
-                if (commentButton) {
-                    const body = prompt('Comentário rápido:');
-                    if (!body || !body.trim()) return;
-                    const [type, id] = commentButton.dataset.socialComment.split(':');
-                    await apiFetch(`/api/social/${type}/${id}/comments`, { method: 'POST', body: { body: body.trim() } });
-                    showToast('Comentário publicado.');
-                    await fetchAndRenderSocial();
-                }
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('feed-page-list')?.addEventListener('click', async (event) => {
-            const likeButton = event.target.closest('[data-social-like]');
-            const commentButton = event.target.closest('[data-social-comment]');
-            try {
-                if (likeButton) {
-                    const [type, id] = likeButton.dataset.socialLike.split(':');
-                    await apiFetch(`/api/social/${type}/${id}/like`, { method: 'POST' });
-                    await fetchAndRenderFeedPage();
-                }
-                if (commentButton) {
-                    const body = prompt('Comentário rápido:');
-                    if (!body || !body.trim()) return;
-                    const [type, id] = commentButton.dataset.socialComment.split(':');
-                    await apiFetch(`/api/social/${type}/${id}/comments`, { method: 'POST', body: { body: body.trim() } });
-                    showToast('Comentário publicado.');
-                    await fetchAndRenderFeedPage();
-                }
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
-
-        document.getElementById('public-profile-lookup')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const username = document.getElementById('public-profile-username').value.trim();
-            if (username) await renderPublicDetail(`/api/users/${encodeURIComponent(username)}/profile`, 'Perfil público');
-        });
-
-        document.getElementById('public-coffee-lookup')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const id = document.getElementById('public-coffee-id').value;
-            if (id) await renderPublicDetail(`/api/public/coffees/${encodeURIComponent(id)}`, 'Página pública de café');
-        });
-
-        document.getElementById('public-roastery-lookup')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const name = document.getElementById('public-roastery-name').value.trim();
-            if (name) await renderPublicDetail(`/api/public/roasteries/${encodeURIComponent(name)}`, 'Página de torrefação');
-        });
-
-        document.getElementById('public-method-lookup')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const method = document.getElementById('public-method-name').value.trim();
-            if (method) await renderPublicDetail(`/api/public/methods/${encodeURIComponent(method)}`, 'Página de método');
-        });
-
-        document.getElementById('privacy-form')?.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            try {
-                const result = await apiFetch('/api/auth/me/privacy', {
-                    method: 'PUT',
-                    body: {
-                        profile_visibility: document.getElementById('privacy-profile').value,
-                        diary_visibility: document.getElementById('privacy-diary').value
-                    }
-                });
-                state.user = {
-                    ...state.user,
-                    profile_visibility: result.profile_visibility,
-                    diary_visibility: result.diary_visibility,
-                    is_public_profile: result.is_public_profile
-                };
-                localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
-                updateUserDOM();
-                showToast('Privacidade atualizada.');
-            } catch (err) {
-                showToast(err.message, 'error');
-            }
-        });
 
         // --- FASE 8: HISTÓRICO DE EXTRAÇÕES ---
         async function fetchAndRenderExtractions() {
@@ -3291,12 +2562,6 @@ async function apiFetch(
             if (name === 'beverages') fetchAndRenderBeverages();
             if (name === 'ai') loadAiSessions(true);
             if (name === 'stats') fetchAndRenderStats();
-            if (name === 'social') fetchAndRenderSocial();
-            if (name === 'feed') fetchAndRenderFeedPage();
-            if (name === 'explore') fetchAndRenderExplorePage();
-            if (name === 'trends') fetchAndRenderTrendsPage();
-            if (name === 'onboarding') fetchAndRenderOnboardingPage();
-            if (name === 'privacy') fetchAndRenderPrivacyPage();
 
             setTimeout(() => {
             const motorCoffee = document.getElementById('motor-coffee');
@@ -3888,12 +3153,6 @@ window.editBeverage = async (id) => {
         chatForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
     }
     };
-
-    document.querySelectorAll('[data-ai-suggestion]').forEach(button => {
-        button.addEventListener('click', () => {
-            window.sendAiPrompt(button.dataset.aiSuggestion || button.textContent || '');
-        });
-    });
 
     // Evento de Envio do Formulário de Chat (Unificado)
     if (chatForm) {
@@ -5046,7 +4305,6 @@ window.editBeverage = async (id) => {
             initGoogleLogin();
             initNotificationSystem();
             initShareStoryEditor();
-            fetchAndRenderPublicLanding();
             const appShell = document.getElementById('app');
             const appMenuToggle = document.getElementById('app-menu-toggle');
             const detectsMobileLayout = () =>
