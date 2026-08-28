@@ -4549,6 +4549,24 @@ window.editBeverage = async (id) => {
                         registration.scope
                     );
 
+                    registration.update?.();
+
+                    if (registration.waiting) {
+                        registration.waiting.postMessage({ type: "SKIP_WAITING" });
+                    }
+
+                    registration.addEventListener("updatefound", () => {
+                        const nextWorker = registration.installing;
+                        nextWorker?.addEventListener("statechange", () => {
+                            if (
+                                nextWorker.state === "installed" &&
+                                navigator.serviceWorker.controller
+                            ) {
+                                nextWorker.postMessage({ type: "SKIP_WAITING" });
+                            }
+                        });
+                    });
+
                 } catch (error) {
                     console.error(
                         "Erro ao registrar Service Worker:",
@@ -4558,6 +4576,15 @@ window.editBeverage = async (id) => {
             });
         }
         registerServiceWorker();
+
+        let hasReloadedForServiceWorkerUpdate = false;
+        if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.addEventListener("controllerchange", () => {
+                if (hasReloadedForServiceWorkerUpdate) return;
+                hasReloadedForServiceWorkerUpdate = true;
+                window.location.reload();
+            });
+        }
 
         function setupPWAInstall() {
             const installButton =

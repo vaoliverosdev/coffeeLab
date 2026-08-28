@@ -18,7 +18,7 @@
             if (coarsePointer || compactScreen) document.documentElement.classList.add("coffee-lab-mobile");
         })();
     </script>
-    <link rel="stylesheet" href="/static/css/style.css?v=18.4">
+    <link rel="stylesheet" href="/static/css/style.css?v=18.6">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head><body>
@@ -173,7 +173,7 @@
                         </div>
                     </div>
                 </div>
-                <button onclick="toggleTheme()" style="background: none; border: none; cursor: pointer; padding: 8px;" aria-label="Alternar tema">&#9681;</button>
+                <button id="theme-toggle" class="icon-btn theme-toggle-btn" onclick="toggleTheme()" type="button" aria-label="Alternar tema">&#9681;</button>
                 <a href="#/profile" class="user-profile-btn" id="topbar-avatar-btn">
                     <img id="user-avatar-mini" src="https://www.gravatar.com/avatar/00000000000000000000000000000000?d=mp&f=y" alt="Avatar">
                 </a>
@@ -1464,6 +1464,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=18.4"></script>
+    <script src="/static/js/app.js?v=18.6"></script>
 </body>
 </html>
