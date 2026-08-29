@@ -3812,6 +3812,27 @@ window.editBeverage = async (id) => {
                         registration.scope
                     );
 
+                    registration.addEventListener("updatefound", () => {
+                        const nextWorker = registration.installing;
+                        if (!nextWorker) return;
+
+                        nextWorker.addEventListener("statechange", () => {
+                            if (
+                                nextWorker.state === "installed" &&
+                                navigator.serviceWorker.controller
+                            ) {
+                                nextWorker.postMessage({ type: "SKIP_WAITING" });
+                            }
+                        });
+                    });
+
+                    let refreshing = false;
+                    navigator.serviceWorker.addEventListener("controllerchange", () => {
+                        if (refreshing) return;
+                        refreshing = true;
+                        window.location.reload();
+                    });
+
                 } catch (error) {
                     console.error(
                         "Erro ao registrar Service Worker:",

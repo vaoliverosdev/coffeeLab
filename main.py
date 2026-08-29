@@ -24,7 +24,7 @@ from core import (
     create_access_token, User, UserCreate, UserLogin, 
     UserResponse, Token, ProfileUpdate, PasswordChangeRequest, PasswordRecoveryRequest, PasswordResetRequest,
     EmailVerificationRequest, GoogleLoginRequest, AuthActionResponse, NotificationItem,
-    ALGORITHM, get_settings,
+    ALGORITHM, get_settings, utc_now,
     Coffee, CoffeeCreate, CoffeeUpdate, CoffeeResponse,
     Stock, StockUpdate, StockResponse, StockMovement,
     Recipe, RecipeCreate, RecipeUpdate, RecipeResponse, MotorCalculationRequest, MotorCalculationResponse,
@@ -154,7 +154,7 @@ def send_password_reset_email(user: User, token: str) -> bool:
 def check_auth_rate_limit(request: Request, scope: str, limit: int = 8, minutes: int = 15) -> None:
     client_ip = request.client.host if request.client else "unknown"
     key = f"{scope}:{client_ip}"
-    now = datetime.utcnow()
+    now = utc_now()
     window_start = now - timedelta(minutes=minutes)
     attempts = [attempt for attempt in AUTH_RATE_LIMIT.get(key, []) if attempt > window_start]
     if len(attempts) >= limit:
@@ -233,6 +233,8 @@ async def get_current_user(db: Session = Depends(get_db), token: str = None):
     user = db.query(User).filter(User.email == email).first()
     if user is None: 
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Conta indisponível.")
     return user
 
 def get_token_from_header(authorization: Optional[str] = Header(None)):
@@ -259,7 +261,7 @@ def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db
         name=user_in.name.strip(),
         email_verified=False,
         email_verification_token_hash=token_hash,
-        email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
+        email_verification_expires_at=utc_now() + timedelta(hours=24),
     )
     db.add(u)
     db.commit()
@@ -283,6 +285,8 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
     if not verify_password(credentials.password, u.hashed_password):
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos.")
+    if not u.is_active:
+        raise HTTPException(status_code=403, detail="Conta indisponível.")
     if not u.email_verified:
         raise HTTPException(
             status_code=403,
@@ -300,7 +304,7 @@ def resend_verification(req: PasswordRecoveryRequest, request: Request, db: Sess
 
     token, token_hash = create_secure_token()
     user.email_verification_token_hash = token_hash
-    user.email_verification_expires_at = datetime.utcnow() + timedelta(hours=24)
+    user.email_verification_expires_at = utc_now() + timedelta(hours=24)
     db.commit()
 
     sent = send_verification_email(user, token)
@@ -314,7 +318,7 @@ def verify_email(req: EmailVerificationRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email_verification_token_hash == token_hash).first()
     if not user:
         raise HTTPException(status_code=400, detail="Link de verificação inválido.")
-    if user.email_verification_expires_at and user.email_verification_expires_at < datetime.utcnow():
+    if user.email_verification_expires_at and user.email_verification_expires_at < utc_now():
         raise HTTPException(status_code=400, detail="Link de verificação expirado. Solicite um novo.")
 
     user.email_verified = True
@@ -333,7 +337,7 @@ def recover_password(req: PasswordRecoveryRequest, request: Request, db: Session
 
     token, token_hash = create_secure_token()
     user.password_reset_token_hash = token_hash
-    user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
+    user.password_reset_expires_at = utc_now() + timedelta(hours=1)
     db.commit()
 
     sent = send_password_reset_email(user, token)
@@ -348,7 +352,7 @@ def reset_password(req: PasswordResetRequest, request: Request, db: Session = De
     user = db.query(User).filter(User.password_reset_token_hash == token_hash).first()
     if not user:
         raise HTTPException(status_code=400, detail="Link de recuperação inválido.")
-    if user.password_reset_expires_at and user.password_reset_expires_at < datetime.utcnow():
+    if user.password_reset_expires_at and user.password_reset_expires_at < utc_now():
         raise HTTPException(status_code=400, detail="Link de recuperação expirado. Solicite um novo.")
 
     user.hashed_password = hash_password(req.password)
@@ -386,7 +390,12 @@ async def google_login(req: GoogleLoginRequest, request: Request, db: Session = 
     if not email or not google_sub:
         raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
 
-    user = db.query(User).filter(or_(User.email == email, User.google_sub == google_sub)).first()
+    user_by_google = db.query(User).filter(User.google_sub == google_sub).first()
+    user_by_email = db.query(User).filter(User.email == email).first()
+    if user_by_google and user_by_email and user_by_google.id != user_by_email.id:
+        raise HTTPException(status_code=409, detail="Esta conta Google já está vinculada a outro usuário.")
+
+    user = user_by_google or user_by_email
     if not user:
         user = User(
             email=email,
@@ -398,6 +407,10 @@ async def google_login(req: GoogleLoginRequest, request: Request, db: Session = 
         )
         db.add(user)
     else:
+        if user.google_sub and user.google_sub != google_sub:
+            raise HTTPException(status_code=409, detail="Este e-mail já está conectado a outra conta Google.")
+        if not user.is_active:
+            raise HTTPException(status_code=403, detail="Conta indisponível.")
         user.email_verified = True
         user.google_sub = google_sub
         if avatar_url and not user.avatar_url:
@@ -440,7 +453,7 @@ async def change_password(
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
     image_bytes, ext = await read_valid_image_upload(file)
-    filename = f"user_{u.id}_{int(datetime.utcnow().timestamp())}{ext}"
+    filename = f"user_{u.id}_{secrets.token_hex(8)}{ext}"
     with open(AVATAR_DIR / filename, "wb") as b:
         b.write(image_bytes)
     u.avatar_url = f"/static/uploads/avatars/{filename}"
@@ -504,7 +517,7 @@ async def upload_coffee_photo(coffee_id: int, file: UploadFile = File(...), auth
     c = db.query(Coffee).filter(Coffee.id == coffee_id, Coffee.user_id == u.id).first()
     if not c: raise HTTPException(status_code=404, detail="Café não encontrado")
     image_bytes, ext = await read_valid_image_upload(file)
-    filename = f"coffee_{c.id}_{int(datetime.utcnow().timestamp())}{ext}"
+    filename = f"coffee_{c.id}_{secrets.token_hex(8)}{ext}"
     with open(COFFEE_DIR / filename, "wb") as b:
         b.write(image_bytes)
     c.photo_url = f"/static/uploads/coffees/{filename}"
@@ -778,7 +791,7 @@ class AIChatSession(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     title = Column(String(255), default="Nova Conversa", nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     messages = relationship(
         "AIChatMessage", back_populates="session", cascade="all, delete-orphan"
@@ -796,7 +809,7 @@ class AIChatMessage(Base):
     )
     role = Column(String(50), nullable=False)  # 'user' ou 'assistant'
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utc_now)
 
     session = relationship("AIChatSession", back_populates="messages")
 
@@ -1167,7 +1180,7 @@ async def ai_chat_unified(
         headers = {
             "Authorization": f"Bearer {settings.openrouter_api_key.strip()}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
+            "HTTP-Referer": settings.public_base_url.rstrip("/"),
             "X-Title": "Coffee Lab",
         }
         payload = {
@@ -1238,7 +1251,7 @@ async def get_notifications(
     db: Session = Depends(get_db)
 ):
     u = await get_current_user(db, token=authorization)
-    now = datetime.utcnow()
+    now = utc_now()
     notifications: list[NotificationItem] = []
 
     stock_items = (
@@ -1394,10 +1407,14 @@ async def get_sensory_profile(
     
     # Extração de notas mais percebidas
     all_notes = []
-    for l in logs:
-        if l.perceived_notes:
-            notes_split = [n.strip().capitalize() for n in l.perceived_notes.replace(',', ';').split(';') if n.strip()]
-            all_notes.extend(notes_split)
+    for log in logs:
+        perceived_notes = log.perceived_notes or ""
+        notes_split = [
+            note.strip().capitalize()
+            for note in perceived_notes.replace(',', ';').split(';')
+            if note.strip()
+        ]
+        all_notes.extend(notes_split)
     
     from collections import Counter
     top_notes = [item[0] for item in Counter(all_notes).most_common(5)]

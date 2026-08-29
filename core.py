@@ -4,12 +4,14 @@ from typing import Optional, List, Any
 import bcrypt
 import re
 from jose import jwt
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import create_engine, String, Integer, Boolean, Text, Float, Date, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     database_url: str = "sqlite:///./coffee_lab_dev.db"
     secret_key: str = "change-me-to-something-really-truly-secret"
     openrouter_api_key: Optional[str] = None
@@ -24,13 +26,12 @@ class Settings(BaseSettings):
     smtp_from_email: Optional[str] = None
     smtp_from_name: str = "Coffee Lab"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class Base(DeclarativeBase):
     pass
@@ -89,7 +90,7 @@ class Stock(Base):
     current_quantity: Mapped[float] = mapped_column(Float, default=0.0)
     min_quantity: Mapped[float] = mapped_column(Float, default=50.0)
     is_opened: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, onupdate=utc_now)
 
     coffee: Mapped["Coffee"] = relationship("Coffee", back_populates="stock")
     movements: Mapped[List["StockMovement"]] = relationship("StockMovement", back_populates="stock", cascade="all, delete-orphan")
@@ -102,7 +103,7 @@ class StockMovement(Base):
     quantity_changed: Mapped[float] = mapped_column(Float, nullable=False)
     action_type: Mapped[str] = mapped_column(String(50), nullable=False)
     notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     stock: Mapped["Stock"] = relationship("Stock", back_populates="movements")
 
@@ -122,7 +123,7 @@ class Recipe(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     steps: Mapped[Optional[Any]] = mapped_column(JSON, default=list) # Lista de instruções estruturadas
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     user: Mapped["User"] = relationship("User", back_populates="recipes")
     coffee: Mapped[Optional["Coffee"]] = relationship("Coffee", back_populates="recipes")
@@ -183,8 +184,9 @@ class UserCreate(BaseModel):
 
 class UserLogin(BaseModel): email: EmailStr; password: str
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool; email_verified: bool
-    class Config: from_attributes = True
 class Token(BaseModel): access_token: str; token_type: str; user: UserResponse
 class ProfileUpdate(BaseModel): name: Optional[str] = None; bio: Optional[str] = None
 class PasswordChangeRequest(BaseModel):
@@ -222,16 +224,45 @@ class NotificationItem(BaseModel):
     created_at: datetime
     action_url: Optional[str] = None
 
-class CoffeeCreate(BaseModel): name: str; roastery: str; origin: str; region: Optional[str] = None; variety: Optional[str] = None; process: Optional[str] = None; altitude: Optional[str] = None; roast_level: Optional[str] = None; roast_date: Optional[date] = None; sensory_notes: Optional[str] = None; sca_score: Optional[float] = None
-class CoffeeUpdate(BaseModel): name: Optional[str] = None; roastery: Optional[str] = None; origin: Optional[str] = None; region: Optional[str] = None; variety: Optional[str] = None; process: Optional[str] = None; altitude: Optional[str] = None; roast_level: Optional[str] = None; roast_date: Optional[date] = None; sensory_notes: Optional[str] = None; sca_score: Optional[float] = None; is_favorite: Optional[bool] = None
-class CoffeeResponse(BaseModel):
-    id: int; user_id: int; name: str; roastery: str; origin: str; region: Optional[str]; variety: Optional[str]; process: Optional[str]; altitude: Optional[str]; roast_level: Optional[str]; roast_date: Optional[date]; sensory_notes: Optional[str]; sca_score: Optional[float]; photo_url: Optional[str]; is_favorite: bool
-    class Config: from_attributes = True
+class CoffeeCreate(BaseModel):
+    name: str
+    roastery: str
+    origin: str
+    region: Optional[str] = None
+    variety: Optional[str] = None
+    process: Optional[str] = None
+    altitude: Optional[str] = None
+    roast_level: Optional[str] = None
+    roast_date: Optional[date] = None
+    sensory_notes: Optional[str] = None
+    sca_score: Optional[float] = Field(default=None, ge=0, le=100)
 
-class StockUpdate(BaseModel): current_quantity: Optional[float] = None; min_quantity: Optional[float] = None; is_opened: Optional[bool] = None
+class CoffeeUpdate(BaseModel):
+    name: Optional[str] = None
+    roastery: Optional[str] = None
+    origin: Optional[str] = None
+    region: Optional[str] = None
+    variety: Optional[str] = None
+    process: Optional[str] = None
+    altitude: Optional[str] = None
+    roast_level: Optional[str] = None
+    roast_date: Optional[date] = None
+    sensory_notes: Optional[str] = None
+    sca_score: Optional[float] = Field(default=None, ge=0, le=100)
+    is_favorite: Optional[bool] = None
+class CoffeeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int; user_id: int; name: str; roastery: str; origin: str; region: Optional[str]; variety: Optional[str]; process: Optional[str]; altitude: Optional[str]; roast_level: Optional[str]; roast_date: Optional[date]; sensory_notes: Optional[str]; sca_score: Optional[float]; photo_url: Optional[str]; is_favorite: bool
+
+class StockUpdate(BaseModel):
+    current_quantity: Optional[float] = Field(default=None, ge=0)
+    min_quantity: Optional[float] = Field(default=None, ge=0)
+    is_opened: Optional[bool] = None
 class StockResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int; coffee_id: int; current_quantity: float; min_quantity: float; is_opened: bool; updated_at: datetime; coffee: CoffeeResponse
-    class Config: from_attributes = True
 
 # --- SCHEMAS PYDANTIC - RECEITAS (FASE 5) ---
 class RecipeCreate(BaseModel):
@@ -241,23 +272,25 @@ class RecipeCreate(BaseModel):
     coffee_weight: float = Field(..., gt=0)
     water_weight: float = Field(..., gt=0)
     grind_size: Optional[str] = None
-    water_temp: Optional[int] = None
+    water_temp: Optional[int] = Field(default=None, ge=0, le=100)
     description: Optional[str] = None
-    steps: Optional[List[str]] = [] # Armazenado como uma lista de strings sequenciais
+    steps: Optional[List[str]] = Field(default_factory=list) # Armazenado como uma lista de strings sequenciais
 
 class RecipeUpdate(BaseModel):
     coffee_id: Optional[int] = None
     name: Optional[str] = None
     method: Optional[str] = None
-    coffee_weight: Optional[float] = None
-    water_weight: Optional[float] = None
+    coffee_weight: Optional[float] = Field(default=None, gt=0)
+    water_weight: Optional[float] = Field(default=None, gt=0)
     grind_size: Optional[str] = None
-    water_temp: Optional[int] = None
+    water_temp: Optional[int] = Field(default=None, ge=0, le=100)
     description: Optional[str] = None
     steps: Optional[List[str]] = None
     is_favorite: Optional[bool] = None
 
 class RecipeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     coffee_id: Optional[int]
@@ -272,9 +305,6 @@ class RecipeResponse(BaseModel):
     is_favorite: bool
     created_at: datetime
     coffee: Optional[CoffeeResponse] = None
-
-    class Config:
-        from_attributes = True
 
 #--- SCHEMAS PYDANTIC - MOTOR INTELIGENTE (FASE 6)
 class MotorCalculationRequest(BaseModel):
@@ -297,7 +327,7 @@ class Extraction(Base):
     recipe_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True)
     coffee_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("cafes.id", ondelete="SET NULL"), nullable=True)
     total_time: Mapped[int] = mapped_column(Integer, nullable=False) # em segundos
-    extraction_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    extraction_date: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
@@ -309,11 +339,13 @@ class Extraction(Base):
 class ExtractionCreate(BaseModel):
     recipe_id: Optional[int] = None
     coffee_id: Optional[int] = None
-    total_time: int
-    rating: Optional[int] = None
+    total_time: int = Field(..., gt=0)
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
     notes: Optional[str] = None
 
 class ExtractionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     recipe_id: Optional[int]
@@ -324,9 +356,6 @@ class ExtractionResponse(BaseModel):
     notes: Optional[str]
     coffee: Optional[CoffeeResponse] = None
     recipe: Optional[RecipeResponse] = None
-
-    class Config:
-        from_attributes = True
 
 # ==========================================
 # --- FASE 9: MODELO DIÁRIO SENSORIAL ------
@@ -349,7 +378,7 @@ class SensoryLog(Base):
     perceived_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # Ex: "Frutas vermelhas, Caramelo"
     unperceived_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True) # Notas da embalagem não sentidas
     comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
     coffee: Mapped[Optional["Coffee"]] = relationship("Coffee")
     extraction: Mapped[Optional["Extraction"]] = relationship("Extraction")
@@ -360,16 +389,18 @@ class SensoryLog(Base):
 class SensoryLogCreate(BaseModel):
     coffee_id: Optional[int] = None
     extraction_id: Optional[int] = None
-    aroma_score: int = 5
-    acidity_score: int = 5
-    body_score: int = 5
-    sweetness_score: int = 5
-    aftertaste_score: int = 5
+    aroma_score: int = Field(default=5, ge=1, le=10)
+    acidity_score: int = Field(default=5, ge=1, le=10)
+    body_score: int = Field(default=5, ge=1, le=10)
+    sweetness_score: int = Field(default=5, ge=1, le=10)
+    aftertaste_score: int = Field(default=5, ge=1, le=10)
     perceived_notes: Optional[str] = None
     unperceived_notes: Optional[str] = None
     comments: Optional[str] = None
 
 class SensoryLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     coffee_id: Optional[int]
@@ -384,9 +415,6 @@ class SensoryLogResponse(BaseModel):
     comments: Optional[str]
     created_at: datetime
     coffee: Optional[CoffeeResponse] = None
-
-    class Config:
-        from_attributes = True
 
 # --- SCHEMAS PYDANTIC - EXPLORADOR SENSORIAL (FASE 10) ---
 class SensoryUserProfileResponse(BaseModel):
@@ -419,13 +447,11 @@ class BeverageCreate(BaseModel):
     description: Optional[str] = None
     is_cold: bool = False
     ingredients: Optional[str] = None
-    espresso_shots: int = 1
-    total_volume_ml: Optional[int] = None
+    espresso_shots: int = Field(default=1, ge=0, le=10)
+    total_volume_ml: Optional[int] = Field(default=None, ge=0)
 
 class BeverageResponse(BeverageCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
-    
-    class Config:
-        from_attributes = True # Se usar Pydantic v2 (FastAPI mais recente)
-        # orm_mode = True      # Descomente essa linha e apague a de cima se usar Pydantic v1

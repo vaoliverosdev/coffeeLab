@@ -1,10 +1,10 @@
-const CACHE_NAME = "coffee-lab-v18.6";
+const CACHE_NAME = "coffee-lab-v18.7";
 
 const APP_SHELL = [
     "/",
     "/static/index.html",
-    "/static/css/style.css?v=18.6",
-    "/static/js/app.js?v=18.6",
+    "/static/css/style.css?v=18.7",
+    "/static/js/app.js?v=18.7",
     "/static/manifest.json",
     "/static/icons/icon-192.png",
     "/static/icons/icon-512.png"
@@ -69,6 +69,12 @@ self.addEventListener("notificationclick", (event) => {
             return clients.openWindow(targetUrl.href);
         })
     );
+});
+
+self.addEventListener("message", (event) => {
+    if (event.data?.type === "SKIP_WAITING") {
+        self.skipWaiting();
+    }
 });
 
 async function networkFirst(request, fallbackPath) {
