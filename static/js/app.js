@@ -74,6 +74,8 @@
         let pendingShare = null;
         let sharePhotoDataUrl = null;
         let sharePreviewRaf = null;
+        let googleClientId = null;
+        let googleButtonsRendered = false;
 
         const html = document.documentElement;
         const authScreen = document.getElementById('auth-screen');
@@ -1370,6 +1372,22 @@ async function apiFetch(
             if (profileEmailDisplay && user?.email) {
                 profileEmailDisplay.innerText = user.email;
             }
+            const googleStatus = document.getElementById('profile-google-status');
+            const googleDisconnectBtn = document.getElementById('google-disconnect-btn');
+            const googleConnectButton = document.getElementById('google-connect-button');
+            if (googleStatus) {
+                googleStatus.innerText = user?.google_connected
+                    ? (user?.password_login_enabled === false
+                        ? 'Conta conectada ao Google. Defina uma senha para também entrar com e-mail.'
+                        : 'Conta conectada ao Google. Você pode entrar com Google ou e-mail e senha.')
+                    : 'Conta ainda não conectada ao Google.';
+            }
+            if (googleDisconnectBtn) {
+                googleDisconnectBtn.classList.toggle('hidden', !user?.google_connected);
+            }
+            if (googleConnectButton) {
+                googleConnectButton.classList.toggle('hidden', Boolean(user?.google_connected) || !googleClientId);
+            }
             const profileNameInput = document.getElementById('profile-name');
             const profileBioInput = document.getElementById('profile-bio');
             if (profileNameInput && user?.name) {
@@ -1377,6 +1395,18 @@ async function apiFetch(
             }
             if (profileBioInput && user?.bio !== undefined && user?.bio !== null) {
                 profileBioInput.value = user.bio;
+            }
+            const currentPasswordInput = document.getElementById('profile-current-password');
+            const currentPasswordLabel = document.querySelector('label[for="profile-current-password"]');
+            if (currentPasswordInput) {
+                const needsCurrentPassword = user?.password_login_enabled !== false;
+                currentPasswordInput.required = needsCurrentPassword;
+                currentPasswordInput.placeholder = needsCurrentPassword ? '' : 'Não necessária para definir a primeira senha';
+            }
+            if (currentPasswordLabel) {
+                currentPasswordLabel.innerText = user?.password_login_enabled === false
+                    ? 'Senha atual (não necessária)'
+                    : 'Senha atual';
             }
 
             // SVG genérico embutido em base64 que funciona 100% offline
@@ -2162,23 +2192,45 @@ async function apiFetch(
         }
 
         async function initGoogleLogin() {
-            const area = document.getElementById('google-login-area');
-            const button = document.getElementById('google-login-button');
-            if (!area || !button) return;
+            const loginArea = document.getElementById('google-login-area');
+            const loginButton = document.getElementById('google-login-button');
+            const registerArea = document.getElementById('google-register-area');
+            const registerButton = document.getElementById('google-register-button');
+            const connectButton = document.getElementById('google-connect-button');
+            if ((!loginArea || !loginButton) && (!registerArea || !registerButton) && !connectButton) return;
 
             try {
                 const config = await apiFetch('/api/auth/config');
-                if (!config.google_client_id) return;
+                googleClientId = config.google_client_id || null;
+                if (!googleClientId) {
+                    updateUserDOM();
+                    return;
+                }
 
                 const render = () => {
                     if (!window.google?.accounts?.id) {
                         setTimeout(render, 250);
                         return;
                     }
+                    if (googleButtonsRendered) return;
+                    googleButtonsRendered = true;
+
                     window.google.accounts.id.initialize({
-                        client_id: config.google_client_id,
+                        client_id: googleClientId,
                         callback: async (response) => {
                             try {
+                                if (state.token && location.hash === '#/profile') {
+                                    const user = await apiFetch('/api/auth/me/google', {
+                                        method: 'POST',
+                                        body: { credential: response.credential }
+                                    });
+                                    state.user = user;
+                                    localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
+                                    updateUserDOM();
+                                    showToast('Conta Google conectada!');
+                                    return;
+                                }
+
                                 const result = await apiFetch('/api/auth/google', {
                                     method: 'POST',
                                     body: { credential: response.credential }
@@ -2190,13 +2242,31 @@ async function apiFetch(
                             }
                         }
                     });
-                    window.google.accounts.id.renderButton(button, {
+
+                    const googleButtonOptions = {
                         theme: document.documentElement.dataset.theme === 'dark' ? 'filled_black' : 'outline',
                         size: 'large',
                         width: 320,
                         text: 'continue_with'
-                    });
-                    area.classList.remove('hidden');
+                    };
+                    if (loginButton) {
+                        window.google.accounts.id.renderButton(loginButton, googleButtonOptions);
+                        loginArea?.classList.remove('hidden');
+                    }
+                    if (registerButton) {
+                        window.google.accounts.id.renderButton(registerButton, {
+                            ...googleButtonOptions,
+                            text: 'signup_with'
+                        });
+                        registerArea?.classList.remove('hidden');
+                    }
+                    if (connectButton) {
+                        window.google.accounts.id.renderButton(connectButton, {
+                            ...googleButtonOptions,
+                            text: 'continue_with'
+                        });
+                    }
+                    updateUserDOM();
                 };
 
                 render();
@@ -2417,13 +2487,32 @@ async function apiFetch(
                 const result = await apiFetch('/api/auth/me/password', {
                     method: 'PUT',
                     body: {
-                        current_password: currentPassword,
+                        current_password: currentPassword || null,
                         new_password: newPassword
                     }
                 });
                 document.getElementById('profile-password-form').reset();
                 updatePasswordHint('profile-new-password', 'profile-password-hint');
+                state.user = await apiFetch('/api/auth/me');
+                localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
+                updateUserDOM();
                 showToast(result.detail || 'Senha alterada com sucesso.');
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        });
+
+        document.getElementById('google-disconnect-btn')?.addEventListener('click', async () => {
+            if (!navigator.onLine) {
+                showToast('Desconectar Google precisa de conexão com a internet.', 'error');
+                return;
+            }
+            try {
+                const user = await apiFetch('/api/auth/me/google', { method: 'DELETE' });
+                state.user = user;
+                localStorage.setItem("coffee_lab_user", JSON.stringify(state.user));
+                updateUserDOM();
+                showToast('Conta Google desconectada.');
             } catch (err) {
                 showToast(err.message, 'error');
             }

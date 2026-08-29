@@ -18,7 +18,7 @@
             if (coarsePointer || compactScreen) document.documentElement.classList.add("coffee-lab-mobile");
         })();
     </script>
-    <link rel="stylesheet" href="/static/css/style.css?v=18.7">
+    <link rel="stylesheet" href="/static/css/style.css?v=18.8">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head><body>
@@ -49,6 +49,10 @@
             
             <!-- Form de Login -->
             <form id="login-form" class="auth-form">
+                <div id="google-login-area" class="google-login-area hidden">
+                    <div id="google-login-button"></div>
+                    <div class="auth-divider"><span>ou continue com e-mail</span></div>
+                </div>
                 <div class="form-group">
                     <label for="login-email">E-mail</label>
                     <input type="email" id="login-email" required placeholder="seu@email.com">
@@ -56,10 +60,6 @@
                 <div class="form-group">
                     <label for="login-password">Senha</label>
                     <input type="password" id="login-password" required placeholder="••••••••">
-                </div>
-                <div id="google-login-area" class="google-login-area hidden">
-                    <div id="google-login-button"></div>
-                    <div class="auth-divider"><span>ou</span></div>
                 </div>
                 <button type="submit" class="btn btn-primary">Entrar</button>
                 <p class="auth-switch">Não tem conta? <a href="#" id="go-to-register">Criar conta</a></p>
@@ -69,6 +69,10 @@
 
             <!-- Form de Registro -->
             <form id="register-form" class="auth-form hidden">
+                <div id="google-register-area" class="google-login-area hidden">
+                    <div id="google-register-button"></div>
+                    <div class="auth-divider"><span>ou crie com e-mail</span></div>
+                </div>
                 <div class="form-group">
                     <label for="reg-name">Nome Completo</label>
                     <input type="text" id="reg-name" placeholder="Como te chamamos?">
@@ -244,6 +248,19 @@
                         </div>
                         <button type="submit" class="btn btn-primary">Salvar Perfil</button>
                     </form>
+                </div>
+
+                <div class="card profile-card" style="margin-top: 20px;">
+                    <div class="view-header" style="margin-bottom: 16px;">
+                        <div>
+                            <h2 style="font-size:18px; margin:0;">Login com Google</h2>
+                            <p id="profile-google-status" style="margin:4px 0 0;">Verificando conexão da conta...</p>
+                        </div>
+                    </div>
+                    <div id="profile-google-actions" class="google-profile-actions">
+                        <div id="google-connect-button"></div>
+                        <button id="google-disconnect-btn" type="button" class="btn btn-secondary btn-auto hidden">Desconectar Google</button>
+                    </div>
                 </div>
 
                 <div class="card profile-card" style="margin-top: 20px;">
@@ -1117,6 +1134,6 @@
     <script>
         document.getElementById('legacy-modal-sensory')?.remove();
     </script>
-    <script src="/static/js/app.js?v=18.7"></script>
+    <script src="/static/js/app.js?v=18.8"></script>
 </body>
 </html>

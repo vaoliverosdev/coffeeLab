@@ -70,6 +70,21 @@ def auth_headers(client, email="barista@example.com", password="StrongPass1"):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
+def mock_google(monkeypatch, *, email="novo@example.com", sub="google-sub-1", status_code=200, email_verified="true"):
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
+    get_settings.cache_clear()
+    FakeGoogleClient.status_code = status_code
+    FakeGoogleClient.payload = {
+        "aud": "client-id",
+        "email": email,
+        "email_verified": email_verified,
+        "sub": sub,
+        "name": "Novo Barista",
+        "picture": "https://example.com/avatar.png",
+    }
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeGoogleClient)
+
+
 def test_google_login_rejects_when_client_id_is_missing(monkeypatch):
     reset_database()
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
@@ -82,20 +97,20 @@ def test_google_login_rejects_when_client_id_is_missing(monkeypatch):
     assert response.json()["detail"] == "Login com Google não configurado."
 
 
+def test_google_login_rejects_invalid_token(monkeypatch):
+    reset_database()
+    mock_google(monkeypatch, status_code=400)
+
+    with TestClient(main.app) as client:
+        response = client.post("/api/auth/google", json={"credential": "token"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Credencial do Google inválida."
+
+
 def test_google_login_creates_verified_user(monkeypatch):
     reset_database()
-    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id")
-    get_settings.cache_clear()
-    FakeGoogleClient.status_code = 200
-    FakeGoogleClient.payload = {
-        "aud": "client-id",
-        "email": "novo@example.com",
-        "email_verified": "true",
-        "sub": "google-sub-1",
-        "name": "Novo Barista",
-        "picture": "https://example.com/avatar.png",
-    }
-    monkeypatch.setattr(main.httpx, "AsyncClient", FakeGoogleClient)
+    mock_google(monkeypatch)
 
     with TestClient(main.app) as client:
         response = client.post("/api/auth/google", json={"credential": "token"})
@@ -105,6 +120,25 @@ def test_google_login_creates_verified_user(monkeypatch):
     assert data["user"]["email"] == "novo@example.com"
     assert data["user"]["email_verified"] is True
     assert data["user"]["avatar_url"] == "https://example.com/avatar.png"
+    assert data["user"]["google_connected"] is True
+    assert data["user"]["password_login_enabled"] is False
+
+
+def test_google_login_links_existing_user_by_verified_email(monkeypatch):
+    reset_database()
+    create_verified_user(email="existente@example.com", name="Nome Manual", avatar_url="/static/avatar.png")
+    mock_google(monkeypatch, email="existente@example.com", sub="google-sub-existing")
+
+    with TestClient(main.app) as client:
+        response = client.post("/api/auth/google", json={"credential": "token"})
+
+    assert response.status_code == 200, response.text
+    data = response.json()["user"]
+    assert data["email"] == "existente@example.com"
+    assert data["name"] == "Nome Manual"
+    assert data["avatar_url"] == "/static/avatar.png"
+    assert data["google_connected"] is True
+    assert data["password_login_enabled"] is True
 
 
 def test_google_login_blocks_ambiguous_link(monkeypatch):
@@ -129,6 +163,17 @@ def test_google_login_blocks_ambiguous_link(monkeypatch):
     assert response.status_code == 409
 
 
+def test_google_login_rejects_unverified_google_email(monkeypatch):
+    reset_database()
+    mock_google(monkeypatch, email_verified="false")
+
+    with TestClient(main.app) as client:
+        response = client.post("/api/auth/google", json={"credential": "token"})
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "O Google não confirmou este e-mail."
+
+
 def test_google_login_rejects_inactive_existing_user(monkeypatch):
     reset_database()
     create_verified_user(email="inactive@example.com", google_sub="inactive-sub", is_active=False)
@@ -149,6 +194,75 @@ def test_google_login_rejects_inactive_existing_user(monkeypatch):
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Conta indisponível."
+
+
+def test_google_user_can_define_password_and_disconnect(monkeypatch):
+    reset_database()
+    mock_google(monkeypatch, email="google-only@example.com", sub="google-only-sub")
+
+    with TestClient(main.app) as client:
+        login_response = client.post("/api/auth/google", json={"credential": "token"})
+        assert login_response.status_code == 200, login_response.text
+        headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+
+        blocked_disconnect = client.delete("/api/auth/me/google", headers=headers)
+        assert blocked_disconnect.status_code == 400
+        assert blocked_disconnect.json()["detail"] == "Defina uma senha antes de desconectar o Google."
+
+        set_password = client.put(
+            "/api/auth/me/password",
+            headers=headers,
+            json={"current_password": None, "new_password": "ManualPass1"},
+        )
+        assert set_password.status_code == 200, set_password.text
+
+        disconnected = client.delete("/api/auth/me/google", headers=headers)
+        assert disconnected.status_code == 200, disconnected.text
+        assert disconnected.json()["google_connected"] is False
+
+        email_login = client.post(
+            "/api/auth/login",
+            json={"email": "google-only@example.com", "password": "ManualPass1"},
+        )
+        assert email_login.status_code == 200, email_login.text
+
+
+def test_google_connect_requires_same_email(monkeypatch):
+    reset_database()
+    create_verified_user(email="owner@example.com")
+    mock_google(monkeypatch, email="other@example.com", sub="other-sub")
+
+    with TestClient(main.app) as client:
+        headers = auth_headers(client, email="owner@example.com")
+        response = client.post("/api/auth/me/google", headers=headers, json={"credential": "token"})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Use uma conta Google com o mesmo e-mail da sua conta Coffee Lab."
+
+
+def test_user_data_stays_isolated_after_google_login(monkeypatch):
+    reset_database()
+    create_verified_user(email="first@example.com")
+    create_verified_user(email="second@example.com")
+
+    with TestClient(main.app) as client:
+        first_headers = auth_headers(client, email="first@example.com")
+        created = client.post(
+            "/api/coffees",
+            headers=first_headers,
+            json={"name": "Cafe Privado", "roastery": "Torra A", "origin": "Brasil"},
+        )
+        assert created.status_code == 200, created.text
+
+        mock_google(monkeypatch, email="second@example.com", sub="second-google-sub")
+        second_login = client.post("/api/auth/google", json={"credential": "token"})
+        assert second_login.status_code == 200, second_login.text
+        second_headers = {"Authorization": f"Bearer {second_login.json()['access_token']}"}
+
+        list_response = client.get("/api/coffees", headers=second_headers)
+
+    assert list_response.status_code == 200, list_response.text
+    assert list_response.json() == []
 
 
 def test_inactive_user_login_is_rejected():

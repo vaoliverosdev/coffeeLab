@@ -53,9 +53,14 @@ class User(Base):
     password_reset_token_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     password_reset_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     google_sub: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    password_login_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     coffees: Mapped[List["Coffee"]] = relationship("Coffee", back_populates="user", cascade="all, delete-orphan")
     recipes: Mapped[List["Recipe"]] = relationship("Recipe", back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def google_connected(self) -> bool:
+        return bool(self.google_sub)
 
 # --- MODELO DE CAFÉ ---
 class Coffee(Base):
@@ -186,11 +191,11 @@ class UserLogin(BaseModel): email: EmailStr; password: str
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool; email_verified: bool
+    id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool; email_verified: bool; google_connected: bool = False; password_login_enabled: bool = True
 class Token(BaseModel): access_token: str; token_type: str; user: UserResponse
 class ProfileUpdate(BaseModel): name: Optional[str] = None; bio: Optional[str] = None
 class PasswordChangeRequest(BaseModel):
-    current_password: str
+    current_password: Optional[str] = None
     new_password: str
 
     @field_validator("new_password")

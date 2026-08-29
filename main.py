@@ -56,6 +56,7 @@ def ensure_auth_columns() -> None:
             "password_reset_token_hash": "VARCHAR(128)",
             "password_reset_expires_at": "TIMESTAMP",
             "google_sub": "VARCHAR(255)",
+            "password_login_enabled": "BOOLEAN NOT NULL DEFAULT 1",
         }
         with engine.begin() as conn:
             existing = {column["name"] for column in inspect(conn).get_columns("users")}
@@ -76,6 +77,7 @@ def ensure_auth_columns() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_hash VARCHAR(128)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_expires_at TIMESTAMP",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_login_enabled BOOLEAN NOT NULL DEFAULT TRUE",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)",
     ]
     with engine.begin() as conn:
@@ -164,6 +166,37 @@ def check_auth_rate_limit(request: Request, scope: str, limit: int = 8, minutes:
         )
     attempts.append(now)
     AUTH_RATE_LIMIT[key] = attempts
+
+async def verify_google_credential(credential: str) -> dict:
+    settings = get_settings()
+    if not settings.google_client_id:
+        raise HTTPException(status_code=400, detail="Login com Google não configurado.")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": credential},
+        )
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Credencial do Google inválida.")
+
+    profile = response.json()
+    if profile.get("aud") != settings.google_client_id:
+        raise HTTPException(status_code=401, detail="Credencial do Google não pertence a este app.")
+    if profile.get("email_verified") not in ("true", True):
+        raise HTTPException(status_code=401, detail="O Google não confirmou este e-mail.")
+
+    email = str(profile.get("email") or "").lower()
+    google_sub = str(profile.get("sub") or "")
+    if not email or not google_sub:
+        raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
+
+    return {
+        "email": email,
+        "google_sub": google_sub,
+        "name": str(profile.get("name") or email.split("@")[0] or "Barista"),
+        "avatar_url": profile.get("picture"),
+    }
 
 async def read_valid_image_upload(file: UploadFile) -> tuple[bytes, str]:
     if file.content_type and file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
@@ -356,6 +389,7 @@ def reset_password(req: PasswordResetRequest, request: Request, db: Session = De
         raise HTTPException(status_code=400, detail="Link de recuperação expirado. Solicite um novo.")
 
     user.hashed_password = hash_password(req.password)
+    user.password_login_enabled = True
     user.password_reset_token_hash = None
     user.password_reset_expires_at = None
     user.email_verified = True
@@ -365,30 +399,9 @@ def reset_password(req: PasswordResetRequest, request: Request, db: Session = De
 @app.post("/api/auth/google", response_model=Token)
 async def google_login(req: GoogleLoginRequest, request: Request, db: Session = Depends(get_db)):
     check_auth_rate_limit(request, "google-login", limit=12, minutes=15)
-    settings = get_settings()
-    if not settings.google_client_id:
-        raise HTTPException(status_code=400, detail="Login com Google não configurado.")
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(
-            "https://oauth2.googleapis.com/tokeninfo",
-            params={"id_token": req.credential},
-        )
-    if response.status_code != 200:
-        raise HTTPException(status_code=401, detail="Credencial do Google inválida.")
-
-    profile = response.json()
-    if profile.get("aud") != settings.google_client_id:
-        raise HTTPException(status_code=401, detail="Credencial do Google não pertence a este app.")
-    if profile.get("email_verified") not in ("true", True):
-        raise HTTPException(status_code=401, detail="O Google não confirmou este e-mail.")
-
-    email = str(profile.get("email") or "").lower()
-    google_sub = str(profile.get("sub") or "")
-    name = str(profile.get("name") or email.split("@")[0] or "Barista")
-    avatar_url = profile.get("picture")
-    if not email or not google_sub:
-        raise HTTPException(status_code=401, detail="Perfil do Google incompleto.")
+    profile = await verify_google_credential(req.credential)
+    email = profile["email"]
+    google_sub = profile["google_sub"]
 
     user_by_google = db.query(User).filter(User.google_sub == google_sub).first()
     user_by_email = db.query(User).filter(User.email == email).first()
@@ -400,10 +413,11 @@ async def google_login(req: GoogleLoginRequest, request: Request, db: Session = 
         user = User(
             email=email,
             hashed_password=hash_password(secrets.token_urlsafe(32)),
-            name=name,
-            avatar_url=avatar_url,
+            name=profile["name"],
+            avatar_url=profile["avatar_url"],
             email_verified=True,
             google_sub=google_sub,
+            password_login_enabled=False,
         )
         db.add(user)
     else:
@@ -413,8 +427,8 @@ async def google_login(req: GoogleLoginRequest, request: Request, db: Session = 
             raise HTTPException(status_code=403, detail="Conta indisponível.")
         user.email_verified = True
         user.google_sub = google_sub
-        if avatar_url and not user.avatar_url:
-            user.avatar_url = avatar_url
+        if profile["avatar_url"] and not user.avatar_url:
+            user.avatar_url = profile["avatar_url"]
     db.commit()
     db.refresh(user)
     return {"access_token": create_access_token(data={"sub": user.email}), "token_type": "bearer", "user": user}
@@ -438,16 +452,62 @@ async def change_password(
     db: Session = Depends(get_db),
 ):
     u = await get_current_user(db, token=authorization)
-    if not verify_password(req.current_password, u.hashed_password):
+    if u.password_login_enabled and not req.current_password:
+        raise HTTPException(status_code=400, detail="Informe a senha atual.")
+    if u.password_login_enabled and not verify_password(req.current_password, u.hashed_password):
         raise HTTPException(status_code=401, detail="Senha atual incorreta.")
-    if verify_password(req.new_password, u.hashed_password):
+    if u.password_login_enabled and verify_password(req.new_password, u.hashed_password):
         raise HTTPException(status_code=400, detail="A nova senha precisa ser diferente da senha atual.")
 
     u.hashed_password = hash_password(req.new_password)
+    u.password_login_enabled = True
     u.password_reset_token_hash = None
     u.password_reset_expires_at = None
     db.commit()
     return {"detail": "Senha alterada com sucesso."}
+
+@app.post("/api/auth/me/google", response_model=UserResponse)
+async def connect_google_account(
+    req: GoogleLoginRequest,
+    request: Request,
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    check_auth_rate_limit(request, "google-connect", limit=8, minutes=15)
+    u = await get_current_user(db, token=authorization)
+    profile = await verify_google_credential(req.credential)
+    if profile["email"] != u.email.lower():
+        raise HTTPException(status_code=409, detail="Use uma conta Google com o mesmo e-mail da sua conta Coffee Lab.")
+
+    linked_user = db.query(User).filter(User.google_sub == profile["google_sub"]).first()
+    if linked_user and linked_user.id != u.id:
+        raise HTTPException(status_code=409, detail="Esta conta Google já está vinculada a outro usuário.")
+    if u.google_sub and u.google_sub != profile["google_sub"]:
+        raise HTTPException(status_code=409, detail="Sua conta já está conectada a outro login Google.")
+
+    u.google_sub = profile["google_sub"]
+    u.email_verified = True
+    if profile["avatar_url"] and not u.avatar_url:
+        u.avatar_url = profile["avatar_url"]
+    db.commit()
+    db.refresh(u)
+    return u
+
+@app.delete("/api/auth/me/google", response_model=UserResponse)
+async def disconnect_google_account(
+    authorization: Annotated[str | None, Depends(get_token_from_header)] = None,
+    db: Session = Depends(get_db),
+):
+    u = await get_current_user(db, token=authorization)
+    if not u.google_sub:
+        raise HTTPException(status_code=400, detail="Sua conta não está conectada ao Google.")
+    if not u.password_login_enabled:
+        raise HTTPException(status_code=400, detail="Defina uma senha antes de desconectar o Google.")
+
+    u.google_sub = None
+    db.commit()
+    db.refresh(u)
+    return u
 
 @app.post("/api/auth/me/avatar")
 async def upload_avatar(file: UploadFile = File(...), authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):

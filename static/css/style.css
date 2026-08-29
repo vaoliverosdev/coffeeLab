@@ -118,9 +118,11 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .password-hint { color: var(--text-secondary); font-size: 12px; line-height: 1.35; }
 .password-hint.valid { color: #16a34a; }
 .password-hint.invalid { color: #ef4444; }
-.google-login-area { display: flex; flex-direction: column; align-items: stretch; gap: 12px; margin: 4px 0 14px; }
+.google-login-area { display: flex; flex-direction: column; align-items: center; gap: 14px; margin: 4px 0 18px; }
+.google-login-area > div:first-child { min-height: 40px; }
 .auth-divider { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 12px; }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.auth-form .auth-divider { width: 100%; }
 
 /* Topbar & Profile UI elements */
 .topbar { grid-area: topbar; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border); background: color-mix(in srgb, var(--surface-raised) 86%, transparent); backdrop-filter: blur(18px); }
@@ -257,6 +259,7 @@ html, body { height: 100%; margin: 0; padding: 0; font-family: var(--font); back
 .avatar-container:hover .avatar-edit-label { opacity: 1; }
 .profile-meta h3 { margin: 0 0 4px; font-size: 18px; }
 .profile-meta p { color: var(--text-secondary); font-size: 14px; }
+.google-profile-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 
 /* Dashboard and general blocks */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
