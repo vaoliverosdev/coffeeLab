@@ -213,8 +213,12 @@ def test_pwa_shell_and_production_config_guards(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "short")
     monkeypatch.setenv("PUBLIC_BASE_URL", "http://localhost:8000")
     monkeypatch.setenv("ALLOWED_ORIGINS", "*")
+    monkeypatch.delenv("STRICT_PRODUCTION_CONFIG", raising=False)
     get_settings.cache_clear()
     try:
+        validate_runtime_settings()
+        monkeypatch.setenv("STRICT_PRODUCTION_CONFIG", "true")
+        get_settings.cache_clear()
         try:
             validate_runtime_settings()
         except RuntimeError as exc:
@@ -224,7 +228,8 @@ def test_pwa_shell_and_production_config_guards(monkeypatch):
             assert "PUBLIC_BASE_URL" in message
             assert "DATABASE_URL" in message
         else:
-            raise AssertionError("production config validation should fail")
+            raise AssertionError("strict production config validation should fail")
     finally:
         monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.delenv("STRICT_PRODUCTION_CONFIG", raising=False)
         get_settings.cache_clear()
