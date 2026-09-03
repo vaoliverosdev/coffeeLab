@@ -53,6 +53,7 @@
                     <div id="google-login-button"></div>
                     <div class="auth-divider"><span>ou continue com e-mail</span></div>
                 </div>
+                <p id="google-login-status" class="auth-provider-note hidden"></p>
                 <div class="form-group">
                     <label for="login-email">E-mail</label>
                     <input type="email" id="login-email" required placeholder="seu@email.com">
@@ -193,7 +194,7 @@
                 <div class="dashboard-grid">
                     <div class="card dashboard-spotlight">
                         <span class="dashboard-label">Ritual de hoje</span>
-                        <strong id="dashboard-main-metric">0 extrações</strong>
+                        <strong id="dashboard-main-metric">0</strong>
                         <p id="dashboard-main-note">Registre seu primeiro preparo para acender o painel.</p>
                     </div>
                     <div class="card dashboard-mini-card">
@@ -216,6 +217,14 @@
                         <p id="dashboard-next-copy">Cadastre um café, crie uma receita e registre a extração para o Coffee Lab começar a gerar histórico útil.</p>
                     </div>
                     <a id="dashboard-next-link" href="#/coffees" class="btn btn-secondary btn-auto">Continuar</a>
+                </div>
+                <div id="dashboard-onboarding" class="onboarding-panel">
+                    <div class="onboarding-copy">
+                        <span class="dashboard-label">Primeiros 10 minutos</span>
+                        <h3>Monte seu laboratório de sabores</h3>
+                        <p>Complete estes passos para transformar uma conta vazia em um diário útil de cafés, receitas e descobertas sensoriais.</p>
+                    </div>
+                    <div id="dashboard-onboarding-steps" class="onboarding-steps"></div>
                 </div>
             </section>
 

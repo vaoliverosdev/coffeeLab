@@ -24,7 +24,7 @@ from core import (
     create_access_token, User, UserCreate, UserLogin, 
     UserResponse, Token, ProfileUpdate, PasswordChangeRequest, PasswordRecoveryRequest, PasswordResetRequest,
     EmailVerificationRequest, GoogleLoginRequest, AuthActionResponse, NotificationItem,
-    ALGORITHM, get_settings, utc_now,
+    ALGORITHM, get_settings, utc_now, validate_runtime_settings,
     Coffee, CoffeeCreate, CoffeeUpdate, CoffeeResponse,
     Stock, StockUpdate, StockResponse, StockMovement,
     Recipe, RecipeCreate, RecipeUpdate, RecipeResponse, MotorCalculationRequest, MotorCalculationResponse,
@@ -225,6 +225,7 @@ async def read_valid_image_upload(file: UploadFile) -> tuple[bytes, str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_runtime_settings()
     Base.metadata.create_all(bind=engine)
     ensure_auth_columns()
     AVATAR_DIR.mkdir(parents=True, exist_ok=True)
@@ -278,7 +279,14 @@ def get_token_from_header(authorization: Optional[str] = Header(None)):
 # --- ENDPOINTS DE AUTENTICAÇÃO ---
 @app.get("/api/auth/config")
 def auth_config():
-    return {"google_client_id": get_settings().google_client_id}
+    google_client_id = get_settings().google_client_id
+    return {
+        "google_client_id": google_client_id,
+        "google_enabled": bool(google_client_id),
+        "google_status_message": "Login com Google ativo."
+        if google_client_id
+        else "Login com Google indisponível neste ambiente. Configure GOOGLE_CLIENT_ID para ativar.",
+    }
 
 @app.post("/api/auth/register", response_model=AuthActionResponse)
 def register(user_in: UserCreate, request: Request, db: Session = Depends(get_db)):
@@ -655,7 +663,12 @@ async def update_recipe(recipe_id: int, recipe_data: RecipeUpdate, authorization
     u = await get_current_user(db, token=authorization)
     rec = db.query(Recipe).filter(Recipe.id == recipe_id, Recipe.user_id == u.id).first()
     if not rec: raise HTTPException(status_code=404, detail="Receita não encontrada.")
-    for k, v in recipe_data.model_dump(exclude_unset=True).items(): setattr(rec, k, v)
+    payload = recipe_data.model_dump(exclude_unset=True)
+    if payload.get("coffee_id") is not None:
+        c = db.query(Coffee).filter(Coffee.id == payload["coffee_id"], Coffee.user_id == u.id).first()
+        if not c:
+            raise HTTPException(status_code=400, detail="O café selecionado é inválido.")
+    for k, v in payload.items(): setattr(rec, k, v)
     db.commit(); db.refresh(rec)
     return rec
 
@@ -1418,6 +1431,14 @@ async def create_sensory_log(
     db: Session = Depends(get_db)
 ):
     u = await get_current_user(db, token=authorization)
+    if payload.coffee_id is not None:
+        coffee = db.query(Coffee).filter(Coffee.id == payload.coffee_id, Coffee.user_id == u.id).first()
+        if not coffee:
+            raise HTTPException(status_code=400, detail="O café selecionado é inválido.")
+    if payload.extraction_id is not None:
+        extraction = db.query(Extraction).filter(Extraction.id == payload.extraction_id, Extraction.user_id == u.id).first()
+        if not extraction:
+            raise HTTPException(status_code=400, detail="A extração selecionada é inválida.")
     log = SensoryLog(
         user_id=u.id,
         coffee_id=payload.coffee_id,
@@ -1527,27 +1548,39 @@ async def serve_spa(full_path: str):
 @app.post("/api/extractions", response_model=ExtractionResponse)
 async def record_extraction(ext_in: ExtractionCreate, authorization: Annotated[str | None, Depends(get_token_from_header)] = None, db: Session = Depends(get_db)):
     u = await get_current_user(db, token=authorization)
+    payload = ext_in.model_dump()
+    rec = None
+
+    if ext_in.recipe_id is not None:
+        rec = db.query(Recipe).filter(Recipe.id == ext_in.recipe_id, Recipe.user_id == u.id).first()
+        if not rec:
+            raise HTTPException(status_code=400, detail="A receita selecionada é inválida.")
+        if payload.get("coffee_id") is None and rec.coffee_id is not None:
+            payload["coffee_id"] = rec.coffee_id
+
+    if payload.get("coffee_id") is not None:
+        coffee = db.query(Coffee).filter(Coffee.id == payload["coffee_id"], Coffee.user_id == u.id).first()
+        if not coffee:
+            raise HTTPException(status_code=400, detail="O café selecionado é inválido.")
     
     # Salva o log de extração
-    new_ext = Extraction(**ext_in.model_dump(), user_id=u.id)
+    new_ext = Extraction(**payload, user_id=u.id)
     db.add(new_ext)
     db.commit()
     db.refresh(new_ext)
     
     # Automação de Estoque: Se houver receita vinculada e grão definido, deduz o peso usado
-    if ext_in.recipe_id:
-        rec = db.query(Recipe).filter(Recipe.id == ext_in.recipe_id, Recipe.user_id == u.id).first()
-        if rec and rec.coffee_id:
-            stk = db.query(Stock).join(Coffee).filter(Stock.coffee_id == rec.coffee_id, Coffee.user_id == u.id).first()
-            if stk:
-                stk.current_quantity = max(0.0, stk.current_quantity - rec.coffee_weight)
-                db.add(StockMovement(
-                    stock_id=stk.id,
-                    quantity_changed=-rec.coffee_weight,
-                    action_type="consumo",
-                    notes=f"Consumo automático via preparo da receita: {rec.name}"
-                ))
-                db.commit()
+    if rec and rec.coffee_id:
+        stk = db.query(Stock).join(Coffee).filter(Stock.coffee_id == rec.coffee_id, Coffee.user_id == u.id).first()
+        if stk:
+            stk.current_quantity = max(0.0, stk.current_quantity - rec.coffee_weight)
+            db.add(StockMovement(
+                stock_id=stk.id,
+                quantity_changed=-rec.coffee_weight,
+                action_type="consumo",
+                notes=f"Consumo automático via preparo da receita: {rec.name}"
+            ))
+            db.commit()
                 
     return new_ext
 

@@ -119,6 +119,46 @@
             return cleanMessage(detail);
         }
 
+        function escapeHTML(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function safeNumber(value, fallback = '-') {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : fallback;
+        }
+
+        function safeId(value) {
+            return Number.parseInt(value, 10) || 0;
+        }
+
+        function emptyStateHTML({ icon = '&#9749;', title, copy, href, action, label }) {
+            return `
+                <div class="card empty-state-card">
+                    <span class="empty-state-icon" aria-hidden="true">${icon}</span>
+                    <div>
+                        <h3>${escapeHTML(title)}</h3>
+                        <p>${escapeHTML(copy)}</p>
+                    </div>
+                    ${action ? `<button class="btn btn-secondary btn-auto" type="button" data-empty-action="${escapeHTML(action)}">${escapeHTML(label || 'Começar')}</button>` : ''}
+                    ${!action && href ? `<a class="btn btn-secondary btn-auto" href="${escapeHTML(href)}">${escapeHTML(label || 'Começar')}</a>` : ''}
+                </div>
+            `;
+        }
+
+        document.addEventListener('click', (event) => {
+            const actionButton = event.target.closest('[data-empty-action]');
+            if (!actionButton) return;
+            event.preventDefault();
+            const trigger = document.getElementById(actionButton.dataset.emptyAction);
+            if (trigger) trigger.click();
+        });
+
         function isStrongPassword(password, email = '') {
             const emailUser = String(email || '').split('@')[0].toLowerCase();
             return password.length >= 8 &&
@@ -693,9 +733,9 @@
                 return;
             }
             list.innerHTML = visible.map(item => `
-                <a class="notification-item ${item.severity || 'info'}" href="${item.action_url || '#/dashboard'}" data-notification-id="${item.id}">
-                    <strong>${item.title}</strong>
-                    <p>${item.message}</p>
+                <a class="notification-item ${escapeHTML(item.severity || 'info')}" href="${escapeHTML(item.action_url || '#/dashboard')}" data-notification-id="${escapeHTML(item.id)}">
+                    <strong>${escapeHTML(item.title)}</strong>
+                    <p>${escapeHTML(item.message)}</p>
                 </a>
             `).join("");
         }
@@ -1300,6 +1340,9 @@ async function apiFetch(
             updateUserDOM();
         }
         checkAuthUI();
+        if (typeof route === "function") {
+            route();
+        }
     }
 
     function logout() {
@@ -1455,7 +1498,7 @@ async function apiFetch(
                     if (el) el.setAttribute('href', href);
                 };
 
-                setText('dashboard-main-metric', `${todayExtractions.length} preparo${todayExtractions.length === 1 ? '' : 's'} hoje`);
+                setText('dashboard-main-metric', String(todayExtractions.length));
                 setText('dashboard-main-note', todayExtractions.length > 0
                     ? 'Seu ritual ja entrou no historico. Avalie a xicara no Diario Sensorial.'
                     : 'Comece por uma receita guiada e registre a extracao para acompanhar sua evolucao.');
@@ -1480,9 +1523,66 @@ async function apiFetch(
                     setText('dashboard-next-copy', 'Cadastre seu primeiro grao para liberar estoque, receitas e estatisticas mais interessantes.');
                     setHref('dashboard-next-link', '#/coffees');
                 }
+
+                renderOnboardingSteps({
+                    coffeesCount: coffees.length,
+                    stockCount: stock.length,
+                    recipesCount: recipes.length,
+                    extractionsCount: extractions.length,
+                });
             } catch (err) {
                 console.warn('Dashboard indisponivel:', err);
             }
+        }
+
+        function renderOnboardingSteps({ coffeesCount, stockCount, recipesCount, extractionsCount }) {
+            const panel = document.getElementById('dashboard-onboarding');
+            const list = document.getElementById('dashboard-onboarding-steps');
+            if (!panel || !list) return;
+
+            const steps = [
+                {
+                    done: coffeesCount > 0,
+                    title: 'Cadastre um grao especial',
+                    copy: 'Nome, torrefacao, origem, processo e notas para montar sua prateleira.',
+                    href: '#/coffees',
+                    action: coffeesCount > 0 ? 'Feito' : 'Adicionar',
+                },
+                {
+                    done: stockCount > 0,
+                    title: 'Ajuste o estoque',
+                    copy: 'Informe gramas disponiveis e limite minimo para receber alertas uteis.',
+                    href: '#/stock',
+                    action: stockCount > 0 ? 'Feito' : 'Revisar',
+                },
+                {
+                    done: recipesCount > 0,
+                    title: 'Crie uma receita base',
+                    copy: 'Transforme um cafe em preparo repetivel com ratio, moagem e etapas.',
+                    href: '#/recipes',
+                    action: recipesCount > 0 ? 'Feito' : 'Criar',
+                },
+                {
+                    done: extractionsCount > 0,
+                    title: 'Registre a primeira xicara',
+                    copy: 'Use o modo guiado para gerar historico, estatisticas e memoria sensorial.',
+                    href: '#/recipes',
+                    action: extractionsCount > 0 ? 'Feito' : 'Preparar',
+                },
+            ];
+            const complete = steps.every(step => step.done);
+
+            panel.classList.toggle('hidden', complete);
+            list.innerHTML = steps.map((step, index) => `
+                <a class="onboarding-step ${step.done ? 'done' : ''}" href="${escapeHTML(step.href)}">
+                    <span class="onboarding-step-icon">${step.done ? '&#10003;' : index + 1}</span>
+                    <span>
+                        <strong>${escapeHTML(step.title)}</strong>
+                        <span>${escapeHTML(step.copy)}</span>
+                    </span>
+                    <span class="onboarding-step-action">${escapeHTML(step.action)}</span>
+                </a>
+            `).join('');
         }
 
         // --- FASE 3: GRÃOS ESPECIAIS ---
@@ -1520,41 +1620,51 @@ async function apiFetch(
         function renderCoffeeGrid() {
             if (!coffeeGrid) return;
             if (state.coffees.length === 0) {
-            coffeeGrid.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center; color: var(--text-secondary);">Nenhum grão especial na prateleira.</div>';
+            coffeeGrid.innerHTML = emptyStateHTML({
+                title: 'Sua prateleira ainda esta vazia',
+                copy: 'Cadastre o primeiro grao com origem, torrefacao e notas. A partir dele o Coffee Lab libera estoque, receitas e historico de sabor.',
+                action: 'btn-add-coffee',
+                label: 'Adicionar cafe'
+            });
             return;
             }
-            coffeeGrid.innerHTML = state.coffees.map(c => `
+            coffeeGrid.innerHTML = state.coffees.map(c => {
+            const id = safeId(c.id);
+            const scaScore = Number(c.sca_score);
+            const photoUrl = c.photo_url ? escapeHTML(c.photo_url) : '';
+            return `
             <div class="coffee-card">
-                <button class="coffee-card-fav" onclick="window.coffeeActions.toggleFav(${c.id},
+                <button class="coffee-card-fav" onclick="window.coffeeActions.toggleFav(${id},
     ${c.is_favorite})">${c.is_favorite ? '&#9733;' : '&#9734;'}</button>
                 <div class="coffee-card-img-wrapper"
-    onclick="window.coffeeActions.triggerPhotoUpload(${c.id})">
-                ${c.photo_url ? `<img src="${c.photo_url}" alt="${c.name}" loading="lazy" decoding="async">` : '<span class="placeholder-icon">&#9749;</span>'}
-                ${c.sca_score ? `<span class="coffee-card-sca">SCA ${c.sca_score}</span>` : ''}
+    onclick="window.coffeeActions.triggerPhotoUpload(${id})">
+                ${photoUrl ? `<img src="${photoUrl}" alt="${escapeHTML(c.name)}" loading="lazy" decoding="async">` : '<span class="placeholder-icon">&#9749;</span>'}
+                ${Number.isFinite(scaScore) ? `<span class="coffee-card-sca">SCA ${escapeHTML(scaScore.toFixed(1))}</span>` : ''}
                 </div>
                 <div class="coffee-card-content">
-                <h3 class="coffee-card-title">${c.name}</h3>
-                <div class="coffee-card-roastery">${c.roastery}</div>
+                <h3 class="coffee-card-title">${escapeHTML(c.name)}</h3>
+                <div class="coffee-card-roastery">${escapeHTML(c.roastery)}</div>
                 <div class="coffee-meta-grid">
-                    <div><b>Origem:</b> ${c.origin}</div>
-                    <div><b>Região:</b> ${c.region || 'N/A'}</div>
-                    <div><b>Variedade:</b> ${c.variety || 'N/A'}</div>
-                    <div><b>Torra:</b> ${c.roast_level || 'N/A'}</div>
-                    <div><b>Processo:</b> ${c.process || 'N/A'}</div>
-                    <div><b>Altitude:</b> ${c.altitude || 'N/A'}</div>
+                    <div><b>Origem:</b> ${escapeHTML(c.origin)}</div>
+                    <div><b>Região:</b> ${escapeHTML(c.region || 'N/A')}</div>
+                    <div><b>Variedade:</b> ${escapeHTML(c.variety || 'N/A')}</div>
+                    <div><b>Torra:</b> ${escapeHTML(c.roast_level || 'N/A')}</div>
+                    <div><b>Processo:</b> ${escapeHTML(c.process || 'N/A')}</div>
+                    <div><b>Altitude:</b> ${escapeHTML(c.altitude || 'N/A')}</div>
                 </div>
-                <div class="coffee-notes-tags">${c.sensory_notes ? c.sensory_notes : 'Sem notas sensoriais cadastradas.'}</div>
+                <div class="coffee-notes-tags">${escapeHTML(c.sensory_notes || 'Sem notas sensoriais cadastradas.')}</div>
                 <div class="coffee-card-actions">
                     <button class="btn btn-sm btn-share"
-    onclick="window.shareCoffeeLabItem('coffee', ${c.id})">Compartilhar</button>
+    onclick="window.shareCoffeeLabItem('coffee', ${id})">Compartilhar</button>
                     <button class="btn btn-sm btn-secondary"
-    onclick="window.coffeeActions.openEditModal(${c.id})">Editar</button>
+    onclick="window.coffeeActions.openEditModal(${id})">Editar</button>
                     <button class="btn-danger-text"
-    onclick="window.coffeeActions.deleteCoffee(${c.id})">Excluir</button>
+    onclick="window.coffeeActions.deleteCoffee(${id})">Excluir</button>
                 </div>
                 </div>
             </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         window.coffeeActions = {
@@ -1718,32 +1828,35 @@ async function apiFetch(
             return;
             }
             stockTableBody.innerHTML = state.stockItems.map(item => {
+            const id = safeId(item.id);
+            const currentQty = safeNumber(item.current_quantity, 0);
+            const minQty = safeNumber(item.min_quantity, 0);
             const isLowStock = item.current_quantity <= item.min_quantity;
             const quantityBadge = isLowStock
-                ? `<span class="badge badge-danger">${item.current_quantity}g (Baixo)</span>`
-                : `<span class="badge badge-success">${item.current_quantity}g</span>`;
+                ? `<span class="badge badge-danger">${escapeHTML(currentQty)}g (Baixo)</span>`
+                : `<span class="badge badge-success">${escapeHTML(currentQty)}g</span>`;
             const statusBadge = item.is_opened
                 ? `<span class="badge badge-warning">Aberto</span>`
                 : `<span class="badge badge-success">Lacrado</span>`;
 
             return `
                 <tr>
-                <td data-label="Grão"><b>${item.coffee.name}</b></td>
-                <td data-label="Torrefação">${item.coffee.roastery}</td>
+                <td data-label="Grão"><b>${escapeHTML(item.coffee?.name || 'Café sem nome')}</b></td>
+                <td data-label="Torrefação">${escapeHTML(item.coffee?.roastery || 'N/A')}</td>
                 <td data-label="Status">${statusBadge}</td>
                 <td data-label="Quantidade">${quantityBadge}</td>
-                <td data-label="Limite">${item.min_quantity}g</td>
+                <td data-label="Limite">${escapeHTML(minQty)}g</td>
                 <td data-label="Ações" class="stock-actions-cell">
                     <button class="btn btn-sm btn-secondary"
-    onclick="window.stockActions.openRefill(${item.id})">+ Compra</button>
+    onclick="window.stockActions.openRefill(${id})">+ Compra</button>
                     ${!item.is_opened ? `<button class="btn btn-sm btn-secondary"
     style="color:#eab308; border-color:#eab308;"
-    onclick="window.stockActions.openPackage(${item.id})">Abrir</button>` : ''}
+    onclick="window.stockActions.openPackage(${id})">Abrir</button>` : ''}
                     <button class="btn btn-sm btn-secondary"
-    onclick="window.stockActions.openAdjust(${item.id}, ${item.current_quantity},
-    ${item.min_quantity})">Ajustar</button>
+    onclick="window.stockActions.openAdjust(${id}, ${currentQty},
+    ${minQty})">Ajustar</button>
                     <button class="btn btn-sm btn-secondary"
-    onclick="window.stockActions.viewHistory(${item.id})">Histórico</button>
+    onclick="window.stockActions.viewHistory(${id})">Histórico</button>
                 </td>
                 </tr>
             `;
@@ -1785,15 +1898,16 @@ async function apiFetch(
                     let qtyClass = h.quantity_changed > 0 ? 'qty-positive' : (h.quantity_changed < 0 ?
     'qty-negative' : 'qty-neutral');
                     let prefix = h.quantity_changed > 0 ? '+' : '';
+                    const qty = safeNumber(h.quantity_changed, 0);
                     return `
                     <li class="history-log-item">
                         <div class="history-log-meta">
-                        <b>${h.action_type.toUpperCase()}</b>
-                        <span>${h.notes || ''}</span>
+                        <b>${escapeHTML(String(h.action_type || 'movimento').toUpperCase())}</b>
+                        <span>${escapeHTML(h.notes || '')}</span>
                         <span class="history-log-date">${new
     Date(h.created_at).toLocaleString('pt-BR')}</span>
                         </div>
-                        <div class="qty-change-tag ${qtyClass}">${prefix}${h.quantity_changed}g</div>
+                        <div class="qty-change-tag ${qtyClass}">${prefix}${escapeHTML(qty)}g</div>
                     </li>
                     `;
                 }).join('');
@@ -1942,38 +2056,46 @@ async function apiFetch(
         function renderRecipeGrid() {
             if (!recipeGrid) return;
             if (state.recipes.length === 0) {
-                recipeGrid.innerHTML = `<div class="card" style="grid-column:1/-1; text-align:center; color:var(--text-secondary);">Nenhuma receita cadastrada.</div>`;
+                recipeGrid.innerHTML = emptyStateHTML({
+                    title: 'Nenhuma receita calibrada ainda',
+                    copy: 'Crie uma receita base para repetir seus melhores preparos e usar o modo guiado com cronometro.',
+                    action: 'btn-add-recipe',
+                    label: 'Criar receita'
+                });
                 return;
             }
             recipeGrid.innerHTML = state.recipes.map(r => {
-                const ratio = (r.water_weight / r.coffee_weight).toFixed(1);
+                const id = safeId(r.id);
+                const coffeeWeight = safeNumber(r.coffee_weight, 0);
+                const waterWeight = safeNumber(r.water_weight, 0);
+                const ratio = coffeeWeight > 0 ? (waterWeight / coffeeWeight).toFixed(1) : '-';
                 const stepsList = r.steps && r.steps.length > 0
-                    ? `<ol class="recipe-preview-steps">${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>`
+                    ? `<ol class="recipe-preview-steps">${r.steps.map(s => `<li>${escapeHTML(s)}</li>`).join('')}</ol>`
                     : '';
                 const coffeeBind = r.coffee
-                    ? `<span class="recipe-card-icon">&#127793;</span> <b>Gr&#227;o:</b> ${r.coffee.name}`
+                    ? `<span class="recipe-card-icon">&#127793;</span> <b>Gr&#227;o:</b> ${escapeHTML(r.coffee.name)}`
                     : `<span class="recipe-card-icon">&#10024;</span> <b>Gr&#227;o:</b> Qualquer gr&#227;o livre`;
                 return `
                 <div class="coffee-card recipe-card">
-                    <button class="coffee-card-fav" aria-label="${r.is_favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" onclick="window.recipeActions.toggleFav(${r.id}, ${r.is_favorite})">${r.is_favorite ? '&#9733;' : '&#9734;'}</button>
+                    <button class="coffee-card-fav" aria-label="${r.is_favorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}" onclick="window.recipeActions.toggleFav(${id}, ${r.is_favorite})">${r.is_favorite ? '&#9733;' : '&#9734;'}</button>
                     <div class="coffee-card-content recipe-card-content">
-                        <div class="recipe-method-badge">${r.method}</div>
-                        <h3 class="coffee-card-title">${r.name}</h3>
+                        <div class="recipe-method-badge">${escapeHTML(r.method)}</div>
+                        <h3 class="coffee-card-title">${escapeHTML(r.name)}</h3>
                         <div class="recipe-coffee-bind">${coffeeBind}</div>
                         <div class="coffee-meta-grid recipe-meta-grid">
-                            <div><span class="recipe-card-icon">&#9878;</span> <b>Caf&#233;:</b> ${r.coffee_weight}g</div>
-                            <div><span class="recipe-card-icon">&#128167;</span> <b>&#193;gua:</b> ${r.water_weight}g <span class="recipe-ratio-tag">1:${ratio}</span></div>
-                            <div><span class="recipe-card-icon">&#9749;</span> <b>Moagem:</b> ${r.grind_size || 'N/A'}</div>
-                            <div><span class="recipe-card-icon">&#127777;</span> <b>Temp:</b> ${r.water_temp ? `${r.water_temp}&deg;C` : 'N/A'}</div>
+                            <div><span class="recipe-card-icon">&#9878;</span> <b>Caf&#233;:</b> ${escapeHTML(coffeeWeight)}g</div>
+                            <div><span class="recipe-card-icon">&#128167;</span> <b>&#193;gua:</b> ${escapeHTML(waterWeight)}g <span class="recipe-ratio-tag">1:${escapeHTML(ratio)}</span></div>
+                            <div><span class="recipe-card-icon">&#9749;</span> <b>Moagem:</b> ${escapeHTML(r.grind_size || 'N/A')}</div>
+                            <div><span class="recipe-card-icon">&#127777;</span> <b>Temp:</b> ${r.water_temp ? `${escapeHTML(safeNumber(r.water_temp))}&deg;C` : 'N/A'}</div>
                         </div>
-                        ${r.description ? `<p class="recipe-card-description"><span class="recipe-card-icon">&#9997;</span> ${r.description}</p>` : ''}
+                        ${r.description ? `<p class="recipe-card-description"><span class="recipe-card-icon">&#9997;</span> ${escapeHTML(r.description)}</p>` : ''}
                         ${stepsList}
                         <div class="coffee-card-actions recipe-card-actions">
-                            <button class="btn btn-sm btn-prepare" onclick="window.recipeActions.startExtraction(${r.id})"><span>&#9749;</span> Preparar</button>
-                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.openEdit(${r.id})">Editar</button>
-                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.duplicate(${r.id})">Duplicar</button>
-                            <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('recipe', ${r.id})">Compartilhar</button>
-                            <button class="btn-danger-text" onclick="window.recipeActions.deleteRecipe(${r.id})">Excluir</button>
+                            <button class="btn btn-sm btn-prepare" onclick="window.recipeActions.startExtraction(${id})"><span>&#9749;</span> Preparar</button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.openEdit(${id})">Editar</button>
+                            <button class="btn btn-sm btn-secondary" onclick="window.recipeActions.duplicate(${id})">Duplicar</button>
+                            <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('recipe', ${id})">Compartilhar</button>
+                            <button class="btn-danger-text" onclick="window.recipeActions.deleteRecipe(${id})">Excluir</button>
                         </div>
                     </div>
                 </div>
@@ -1986,7 +2108,7 @@ async function apiFetch(
             div.className = 'recipe-step-entry';
             div.innerHTML = `
             <input type="text" class="recipe-step-input-field" required placeholder="Ex: Despejar
-    50g de água..." value="${val}">
+    50g de água..." value="${escapeHTML(val)}">
             <button type="button" class="btn-remove-step"
     onclick="this.parentElement.remove()">&times;</button>
             `;
@@ -2044,7 +2166,7 @@ async function apiFetch(
                 state.coffees = await apiFetch('/api/coffees');
                 if (select) {
                 select.innerHTML = '<option value="">Receita Livre (Qualquer grão)</option>' +
-                    state.coffees.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                    state.coffees.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}</option>`).join('');
                 select.value = r.coffee_id || '';
                 }
             } catch (e) {}
@@ -2063,8 +2185,8 @@ async function apiFetch(
             state.coffees = await apiFetch('/api/coffees');
             if (select) {
                 select.innerHTML = '<option value="">Receita Livre (Qualquer grão)</option>' +
-                state.coffees.map(c => `<option value="${c.id}">${c.name}
-    (${c.roastery})</option>`).join('');
+                state.coffees.map(c => `<option value="${escapeHTML(c.id)}">${escapeHTML(c.name)}
+    (${escapeHTML(c.roastery)})</option>`).join('');
             }
             } catch (e) {}
             addStepRow("Pré-infusão inicial com 50g de água por 30 segundos.");
@@ -2194,6 +2316,7 @@ async function apiFetch(
         async function initGoogleLogin() {
             const loginArea = document.getElementById('google-login-area');
             const loginButton = document.getElementById('google-login-button');
+            const statusNote = document.getElementById('google-login-status');
             const registerArea = document.getElementById('google-register-area');
             const registerButton = document.getElementById('google-register-button');
             const connectButton = document.getElementById('google-connect-button');
@@ -2203,6 +2326,10 @@ async function apiFetch(
                 const config = await apiFetch('/api/auth/config');
                 googleClientId = config.google_client_id || null;
                 if (!googleClientId) {
+                    if (statusNote) {
+                        statusNote.textContent = config.google_status_message || 'Login com Google indisponivel neste ambiente.';
+                        statusNote.classList.remove('hidden');
+                    }
                     updateUserDOM();
                     return;
                 }
@@ -2266,6 +2393,7 @@ async function apiFetch(
                             text: 'continue_with'
                         });
                     }
+                    if (statusNote) statusNote.classList.add('hidden');
                     updateUserDOM();
                 };
 
@@ -2580,18 +2708,16 @@ async function apiFetch(
             if (!container) return;
             if (!state.extractions || !Array.isArray(state.extractions) || state.extractions.length === 0)
     {
-            container.innerHTML = `
-                <div class="card" style="text-align:center; color:var(--text-secondary); padding: 40px
-    20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
-                <span style="font-size: 32px; display:block; margin-bottom: 12px;">
-    &#9749;
-    </span>
-                Nenhuma extração registrada ainda. Prepare uma receita no Modo Guiado para
-    iniciar seu histórico!
-                </div>`;
+            container.innerHTML = emptyStateHTML({
+                title: 'Seu historico de preparo vai nascer aqui',
+                copy: 'Prepare uma receita no modo guiado para registrar tempo, grao, avaliacao e notas da xicara.',
+                href: '#/recipes',
+                label: 'Preparar receita'
+            });
             return;
             }
             container.innerHTML = state.extractions.map(ext => {
+            const id = safeId(ext.id);
             const mins = String(Math.floor((ext.total_time || 0) / 60)).padStart(2, '0');
             const secs = String((ext.total_time || 0) % 60).padStart(2, '0');
             const date = ext.extraction_date
@@ -2608,25 +2734,25 @@ async function apiFetch(
                 <div style="display: flex; justify-content: space-between; align-items: flex-start;
     border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px;">
                     <div>
-                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${date}</span>
+                    <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${escapeHTML(date)}</span>
                     <h3 style="margin: 4px 0 0 0; font-size: 16px; color:
-    var(--text-primary);">${recipeName}</h3>
+    var(--text-primary);">${escapeHTML(recipeName)}</h3>
                     </div>
                     <span class="recipe-ratio-tag" style="background: var(--surface-raised);
     font-family: monospace; font-size: 14px; padding: 4px 8px; border-radius: 4px; border: 1px
-    solid var(--border);">${mins}:${secs}</span>
+    solid var(--border);">${escapeHTML(mins)}:${escapeHTML(secs)}</span>
                 </div>
                 <div style="font-size: 13px; color: var(--text-secondary);">
                     <b>Grão utilizado:</b> <span style="color:
-    var(--text-primary);">${coffeeName}</span>
+    var(--text-primary);">${escapeHTML(coffeeName)}</span>
                 </div>
                 ${ext.notes ? `<div style="font-size: 13px; background: rgba(0,0,0,0.2); padding: 8px;
     border-radius: 6px; font-style: italic; margin-top: 4px; border-left: 3px solid var(--accent);
     color: var(--text-secondary);">
     <span class="recipe-card-icon">&#9997;</span>
-    ${ext.notes}</div>` : ''}
+    ${escapeHTML(ext.notes)}</div>` : ''}
                 <div class="coffee-card-actions" style="margin-top:8px;">
-                    <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('extraction', ${ext.id})">Compartilhar PNG</button>
+                    <button class="btn btn-sm btn-share" onclick="window.shareCoffeeLabItem('extraction', ${id})">Compartilhar PNG</button>
                 </div>
                 </div>
             `;
@@ -2858,11 +2984,13 @@ function renderSensoryLogsList() {
     if (!container) return;
 
     if (!state.sensoryLogs || !Array.isArray(state.sensoryLogs) || state.sensoryLogs.length === 0) {
-        container.innerHTML = `
-            <div class="card" style="text-align:center; color:var(--text-secondary); padding: 40px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;">
-                <span style="font-size: 32px; display:block; margin-bottom: 12px;">&#9997;</span>
-                Nenhum registro sensorial cadastrado ainda. Clique em "+ Nova Degustação" para avaliar seu primeiro café!
-            </div>`;
+        container.innerHTML = emptyStateHTML({
+            icon: '&#9997;',
+            title: 'Treine seu paladar desde a primeira xicara',
+            copy: 'Registre aroma, acidez, corpo, docura e finalizacao para o explorador sensorial revelar seu perfil.',
+            action: 'btn-open-sensory-modal',
+            label: 'Nova degustacao'
+        });
         return;
     }
 
@@ -2880,23 +3008,23 @@ function renderSensoryLogsList() {
             <div class="card" style="margin-bottom: 16px; background: var(--surface); padding: 18px; border: 1px solid var(--border); border-radius: 8px;">
                 <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px;">
                     <div>
-                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${date}</span>
-                        <h3 style="margin: 4px 0 0 0; font-size: 18px; color: var(--text-primary);">${coffeeName}${roastery}</h3>
+                        <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Data: ${escapeHTML(date)}</span>
+                        <h3 style="margin: 4px 0 0 0; font-size: 18px; color: var(--text-primary);">${escapeHTML(coffeeName)}${escapeHTML(roastery)}</h3>
                     </div>
                     <span style="background: var(--accent-light, rgba(230, 81, 0, 0.1)); color: var(--accent); font-weight: bold; font-size: 14px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--accent);">
-                        &#9733; ${avgScore} / 5
+                        &#9733; ${escapeHTML(avgScore)} / 5
                     </span>
                 </div>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; background: var(--surface-raised); padding: 10px; border-radius: 6px; font-size: 13px; text-align: center;">
-                    <div><b>Aroma:</b> ${log.aroma_score ?? '-'}/5</div>
-                    <div><b>Acidez:</b> ${log.acidity_score ?? '-'}/5</div>
-                    <div><b>Corpo:</b> ${log.body_score ?? '-'}/5</div>
-                    <div><b>Doçura:</b> ${log.sweetness_score ?? '-'}/5</div>
-                    <div><b>Finalização:</b> ${log.aftertaste_score ?? '-'}/5</div>
+                    <div><b>Aroma:</b> ${escapeHTML(log.aroma_score ?? '-')}/5</div>
+                    <div><b>Acidez:</b> ${escapeHTML(log.acidity_score ?? '-')}/5</div>
+                    <div><b>Corpo:</b> ${escapeHTML(log.body_score ?? '-')}/5</div>
+                    <div><b>Doçura:</b> ${escapeHTML(log.sweetness_score ?? '-')}/5</div>
+                    <div><b>Finalização:</b> ${escapeHTML(log.aftertaste_score ?? '-')}/5</div>
                 </div>
-                ${log.perceived_notes ? `<div style="font-size: 13px; color: var(--text-primary); margin-bottom: 4px;"><b>Notas Percebidas:</b> ${log.perceived_notes}</div>` : ''}
-                ${log.unperceived_notes ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;"><b>Não Percebidas:</b> ${log.unperceived_notes}</div>` : ''}
-                ${log.comments ? `<div style="font-size: 13px; background: rgba(0,0,0,0.15); padding: 8px; border-radius: 6px; font-style: italic; margin-top: 8px; color: var(--text-secondary);">${log.comments}</div>` : ''}
+                ${log.perceived_notes ? `<div style="font-size: 13px; color: var(--text-primary); margin-bottom: 4px;"><b>Notas Percebidas:</b> ${escapeHTML(log.perceived_notes)}</div>` : ''}
+                ${log.unperceived_notes ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;"><b>Não Percebidas:</b> ${escapeHTML(log.unperceived_notes)}</div>` : ''}
+                ${log.comments ? `<div style="font-size: 13px; background: rgba(0,0,0,0.15); padding: 8px; border-radius: 6px; font-style: italic; margin-top: 8px; color: var(--text-secondary);">${escapeHTML(log.comments)}</div>` : ''}
             </div>
         `;
     }).join('');
@@ -2953,7 +3081,7 @@ async function populateSensoryCoffeeDropdown() {
                 const roastery = coffee.roastery || coffee.roaster || item.roastery || '';
                 const roasteryText = roastery ? ` (${roastery})` : '';
 
-                return `<option value="${coffeeId}">${name}${roasteryText}</option>`;
+                return `<option value="${escapeHTML(coffeeId)}">${escapeHTML(name)}${escapeHTML(roasteryText)}</option>`;
             })
             .join('');
 
@@ -3059,17 +3187,17 @@ function renderSensoryExplorer(data) {
 
     if (summaryContainer) {
         summaryContainer.innerHTML = `
-            <div><b>Degustações Registradas:</b> ${data.total_evaluations}</div>
-            <div><b>Aroma Médio:</b> ${data.avg_aroma} / 10</div>
-            <div><b>Acidez Média:</b> ${data.avg_acidity} / 10</div>
-            <div><b>Corpo Médio:</b> ${data.avg_body} / 10</div>
-            <div><b>Doçura Média:</b> ${data.avg_sweetness} / 10</div>
-            <div><b>Finalização Média:</b> ${data.avg_aftertaste} / 10</div>
-            <div><b>Notas mais Frequentes:</b> ${data.top_notes && data.top_notes.length > 0 ? data.top_notes.join(', ') : 'Nenhuma ainda'}</div> `;
+            <div><b>Degustações Registradas:</b> ${escapeHTML(data.total_evaluations)}</div>
+            <div><b>Aroma Médio:</b> ${escapeHTML(data.avg_aroma)} / 10</div>
+            <div><b>Acidez Média:</b> ${escapeHTML(data.avg_acidity)} / 10</div>
+            <div><b>Corpo Médio:</b> ${escapeHTML(data.avg_body)} / 10</div>
+            <div><b>Doçura Média:</b> ${escapeHTML(data.avg_sweetness)} / 10</div>
+            <div><b>Finalização Média:</b> ${escapeHTML(data.avg_aftertaste)} / 10</div>
+            <div><b>Notas mais Frequentes:</b> ${data.top_notes && data.top_notes.length > 0 ? escapeHTML(data.top_notes.join(', ')) : 'Nenhuma ainda'}</div> `;
     }
 
     if (suggestionsContainer && data.suggestions) {
-        suggestionsContainer.innerHTML = data.suggestions.map(s => `<li>${s}</li>`).join('');
+        suggestionsContainer.innerHTML = data.suggestions.map(s => `<li>${escapeHTML(s)}</li>`).join('');
     }
 }
 
@@ -3091,28 +3219,36 @@ async function fetchAndRenderBeverages() {
         if (!list) return;
 
         if (!beverages || beverages.length === 0) {
-            list.innerHTML = '<div class="card" style="grid-column: 1/-1; text-align: center; color: var(--text-secondary);">Nenhuma bebida no cardápio ainda. Crie a primeira abaixo!</div>';
+            list.innerHTML = emptyStateHTML({
+                title: 'Seu cardapio autoral ainda esta em branco',
+                copy: 'Crie bebidas com espresso, leite, gelo ou assinatura da casa para salvar proporcoes e ideias.',
+                action: 'btn-open-beverage-modal',
+                label: 'Criar bebida'
+            });
             return;
         }
 
-        list.innerHTML = beverages.map(b => `
+        list.innerHTML = beverages.map(b => {
+            const id = safeId(b.id);
+            return `
             <div class="card" style="border-top: 4px solid ${b.is_cold ? '#3b82f6' : '#ef4444'};">
                 <div style="display: flex; justify-content: space-between; align-items: start;">
-                    <h3 style="margin-bottom: 4px;">${b.is_cold ? '&#129482;' : '&#9749;'} ${b.name}</h3>
+                    <h3 style="margin-bottom: 4px;">${b.is_cold ? '&#129482;' : '&#9749;'} ${escapeHTML(b.name)}</h3>
                     <div style="display:flex; gap: 6px;">
-                        <button onclick="shareCoffeeLabItem('beverage', ${b.id})" class="btn btn-sm btn-share" style="width:auto;">Compartilhar</button>
-                        <button onclick="editBeverage(${b.id})" class="btn btn-sm btn-secondary" style="width:auto;">Editar</button>
-                        <button onclick="deleteBeverage(${b.id})" style="background: none; border: none; cursor: pointer; color: #ef4444; font-weight: bold;">x</button>
+                        <button onclick="shareCoffeeLabItem('beverage', ${id})" class="btn btn-sm btn-share" style="width:auto;">Compartilhar</button>
+                        <button onclick="editBeverage(${id})" class="btn btn-sm btn-secondary" style="width:auto;">Editar</button>
+                        <button onclick="deleteBeverage(${id})" style="background: none; border: none; cursor: pointer; color: #ef4444; font-weight: bold;">x</button>
                     </div>
                 </div>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">${b.ingredients || 'Sem ingredientes listados'}</p>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">${escapeHTML(b.ingredients || 'Sem ingredientes listados')}</p>
                 <div style="display: flex; gap: 16px; font-size: 13px; font-weight: 500; margin-bottom: 12px;">
-                    <span>Shots: ${b.espresso_shots}</span>
-                    <span>Vol: ${b.total_volume_ml ? b.total_volume_ml + 'ml' : '--'}</span>
+                    <span>Shots: ${escapeHTML(b.espresso_shots)}</span>
+                    <span>Vol: ${b.total_volume_ml ? escapeHTML(b.total_volume_ml) + 'ml' : '--'}</span>
                 </div>
-                ${b.description ? `<p style="font-size: 14px; padding-top: 12px; border-top: 1px solid var(--border);">${b.description}</p>` : ''}
+                ${b.description ? `<p style="font-size: 14px; padding-top: 12px; border-top: 1px solid var(--border);">${escapeHTML(b.description)}</p>` : ''}
             </div>
-        `).join('');
+        `;
+        }).join('');
     } catch (err) {
         showToast(err.message || "Erro ao carregar bebidas", 'error');
     }
@@ -3664,23 +3800,23 @@ window.editBeverage = async (id) => {
                         <div style="font-size: 12px; color: var(--text-secondary);">Extrações no
     Período</div>
                         <div style="font-size: 26px; font-weight: 700; color:
-    var(--text);">${totalExtractions}</div>
+    var(--text);">${escapeHTML(totalExtractions)}</div>
                     </div>
                     <div class="card" style="padding: 16px;">
                         <div style="font-size: 12px; color: var(--text-secondary);">Consumo
     (Filtro)</div>
                         <div style="font-size: 26px; font-weight: 700; color:
-    var(--accent);">${totalConsumption.toFixed(0)}g</div>
+    var(--accent);">${escapeHTML(totalConsumption.toFixed(0))}g</div>
                     </div>
                     <div class="card" style="padding: 16px;">
                         <div style="font-size: 12px; color: var(--text-secondary);">Método Favorito</div>
                         <div style="font-size: 18px; font-weight: 700; color: var(--text); margin-top:
-    6px;">${favMethod}</div>
+    6px;">${escapeHTML(favMethod)}</div>
                     </div>
                     <div class="card" style="padding: 16px;">
                         <div style="font-size: 12px; color: var(--text-secondary);">Café Favorito</div>
                         <div style="font-size: 18px; font-weight: 700; color: var(--text); margin-top: 6px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${favCoffeeName}</div>
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHTML(favCoffeeName)}</div>
                     </div>
                 `;
             }
@@ -3810,9 +3946,9 @@ window.editBeverage = async (id) => {
 
             // Detecta o tema atual para estilizar os eixos do gráfico (Modo Claro/Escuro)
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-            const textColor = isDark ? '#a1a1aa' : '#62626a';
-            const gridColor = isDark ? '#27272a' : '#e4e4e7';
-            const accentColor = isDark ? '#a1785e' : '#6f4e37';
+            const textColor = isDark ? '#c5b8ad' : '#6d625b';
+            const gridColor = isDark ? '#3a2d27' : '#e7d8ca';
+            const accentColor = isDark ? '#c08a63' : '#8a5a3c';
 
             // Configurações Globais do Chart.js
             Chart.defaults.color = textColor;

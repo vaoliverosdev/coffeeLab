@@ -9,11 +9,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import create_engine, String, Integer, Boolean, Text, Float, Date, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Mapped, mapped_column, relationship
 
+DEFAULT_SECRET_KEY = "change-me-to-something-really-truly-secret"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     database_url: str = "sqlite:///./coffee_lab_dev.db"
-    secret_key: str = "change-me-to-something-really-truly-secret"
+    secret_key: str = DEFAULT_SECRET_KEY
     openrouter_api_key: Optional[str] = None
     app_env: str = "development"
     public_base_url: str = "http://localhost:8000"
@@ -32,6 +35,25 @@ def get_settings() -> Settings:
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def validate_runtime_settings() -> None:
+    settings = get_settings()
+    if settings.app_env.lower() != "production":
+        return
+
+    errors = []
+    if not settings.secret_key or settings.secret_key == DEFAULT_SECRET_KEY or len(settings.secret_key) < 32:
+        errors.append("configure uma SECRET_KEY forte com pelo menos 32 caracteres")
+    if settings.allowed_origins.strip() in {"", "*"}:
+        errors.append("restrinja ALLOWED_ORIGINS ao domínio público do app")
+    if settings.public_base_url.startswith(("http://localhost", "http://127.0.0.1")):
+        errors.append("configure PUBLIC_BASE_URL com a URL pública de produção")
+    if settings.database_url.startswith("sqlite"):
+        errors.append("configure DATABASE_URL com PostgreSQL/NeonDB em produção")
+
+    if errors:
+        raise RuntimeError("Configuração insegura para produção: " + "; ".join(errors) + ".")
 
 class Base(DeclarativeBase):
     pass
@@ -187,15 +209,17 @@ class UserCreate(BaseModel):
     def password_is_strong(cls, value: str, info):
         return validate_password_strength(value, info.data.get("email"))
 
-class UserLogin(BaseModel): email: EmailStr; password: str
+class UserLogin(BaseModel): email: EmailStr; password: str = Field(..., min_length=1, max_length=256)
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int; email: EmailStr; name: str; bio: Optional[str]; avatar_url: Optional[str]; is_active: bool; email_verified: bool; google_connected: bool = False; password_login_enabled: bool = True
 class Token(BaseModel): access_token: str; token_type: str; user: UserResponse
-class ProfileUpdate(BaseModel): name: Optional[str] = None; bio: Optional[str] = None
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=120)
+    bio: Optional[str] = Field(None, max_length=1000)
 class PasswordChangeRequest(BaseModel):
-    current_password: Optional[str] = None
+    current_password: Optional[str] = Field(None, max_length=256)
     new_password: str
 
     @field_validator("new_password")
@@ -205,7 +229,7 @@ class PasswordChangeRequest(BaseModel):
 
 class PasswordRecoveryRequest(BaseModel): email: EmailStr
 class PasswordResetRequest(BaseModel):
-    token: str
+    token: str = Field(..., min_length=16, max_length=256)
     password: str
 
     @field_validator("password")
@@ -213,8 +237,8 @@ class PasswordResetRequest(BaseModel):
     def password_is_strong(cls, value: str):
         return validate_password_strength(value)
 
-class EmailVerificationRequest(BaseModel): token: str
-class GoogleLoginRequest(BaseModel): credential: str
+class EmailVerificationRequest(BaseModel): token: str = Field(..., min_length=16, max_length=256)
+class GoogleLoginRequest(BaseModel): credential: str = Field(..., min_length=1, max_length=4096)
 class AuthActionResponse(BaseModel):
     detail: str
     dev_verification_url: Optional[str] = None
@@ -230,30 +254,29 @@ class NotificationItem(BaseModel):
     action_url: Optional[str] = None
 
 class CoffeeCreate(BaseModel):
-    name: str
-    roastery: str
-    origin: str
-    region: Optional[str] = None
-    variety: Optional[str] = None
-    process: Optional[str] = None
-    altitude: Optional[str] = None
-    roast_level: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=120)
+    roastery: str = Field(..., min_length=1, max_length=120)
+    origin: str = Field(..., min_length=1, max_length=120)
+    region: Optional[str] = Field(None, max_length=120)
+    variety: Optional[str] = Field(None, max_length=120)
+    process: Optional[str] = Field(None, max_length=80)
+    altitude: Optional[str] = Field(None, max_length=80)
+    roast_level: Optional[str] = Field(None, max_length=80)
     roast_date: Optional[date] = None
-    sensory_notes: Optional[str] = None
-    sca_score: Optional[float] = Field(default=None, ge=0, le=100)
-
+    sensory_notes: Optional[str] = Field(None, max_length=1000)
+    sca_score: Optional[float] = Field(None, ge=0, le=100)
 class CoffeeUpdate(BaseModel):
-    name: Optional[str] = None
-    roastery: Optional[str] = None
-    origin: Optional[str] = None
-    region: Optional[str] = None
-    variety: Optional[str] = None
-    process: Optional[str] = None
-    altitude: Optional[str] = None
-    roast_level: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    roastery: Optional[str] = Field(None, min_length=1, max_length=120)
+    origin: Optional[str] = Field(None, min_length=1, max_length=120)
+    region: Optional[str] = Field(None, max_length=120)
+    variety: Optional[str] = Field(None, max_length=120)
+    process: Optional[str] = Field(None, max_length=80)
+    altitude: Optional[str] = Field(None, max_length=80)
+    roast_level: Optional[str] = Field(None, max_length=80)
     roast_date: Optional[date] = None
-    sensory_notes: Optional[str] = None
-    sca_score: Optional[float] = Field(default=None, ge=0, le=100)
+    sensory_notes: Optional[str] = Field(None, max_length=1000)
+    sca_score: Optional[float] = Field(None, ge=0, le=100)
     is_favorite: Optional[bool] = None
 class CoffeeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -261,8 +284,8 @@ class CoffeeResponse(BaseModel):
     id: int; user_id: int; name: str; roastery: str; origin: str; region: Optional[str]; variety: Optional[str]; process: Optional[str]; altitude: Optional[str]; roast_level: Optional[str]; roast_date: Optional[date]; sensory_notes: Optional[str]; sca_score: Optional[float]; photo_url: Optional[str]; is_favorite: bool
 
 class StockUpdate(BaseModel):
-    current_quantity: Optional[float] = Field(default=None, ge=0)
-    min_quantity: Optional[float] = Field(default=None, ge=0)
+    current_quantity: Optional[float] = Field(None, ge=0, le=100000)
+    min_quantity: Optional[float] = Field(None, ge=0, le=100000)
     is_opened: Optional[bool] = None
 class StockResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -272,26 +295,48 @@ class StockResponse(BaseModel):
 # --- SCHEMAS PYDANTIC - RECEITAS (FASE 5) ---
 class RecipeCreate(BaseModel):
     coffee_id: Optional[int] = None
-    name: str = Field(..., min_length=1)
-    method: str
-    coffee_weight: float = Field(..., gt=0)
-    water_weight: float = Field(..., gt=0)
-    grind_size: Optional[str] = None
-    water_temp: Optional[int] = Field(default=None, ge=0, le=100)
-    description: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=120)
+    method: str = Field(..., min_length=1, max_length=80)
+    coffee_weight: float = Field(..., gt=0, le=1000)
+    water_weight: float = Field(..., gt=0, le=10000)
+    grind_size: Optional[str] = Field(None, max_length=120)
+    water_temp: Optional[int] = Field(None, ge=0, le=100)
+    description: Optional[str] = Field(None, max_length=1000)
     steps: Optional[List[str]] = Field(default_factory=list) # Armazenado como uma lista de strings sequenciais
+
+    @field_validator("steps")
+    @classmethod
+    def steps_are_reasonable(cls, value):
+        if value is None:
+            return value
+        if len(value) > 20:
+            raise ValueError("A receita pode ter no máximo 20 etapas.")
+        if any(len(str(step)) > 500 for step in value):
+            raise ValueError("Cada etapa da receita pode ter no máximo 500 caracteres.")
+        return value
 
 class RecipeUpdate(BaseModel):
     coffee_id: Optional[int] = None
-    name: Optional[str] = None
-    method: Optional[str] = None
-    coffee_weight: Optional[float] = Field(default=None, gt=0)
-    water_weight: Optional[float] = Field(default=None, gt=0)
-    grind_size: Optional[str] = None
-    water_temp: Optional[int] = Field(default=None, ge=0, le=100)
-    description: Optional[str] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=120)
+    method: Optional[str] = Field(None, min_length=1, max_length=80)
+    coffee_weight: Optional[float] = Field(None, gt=0, le=1000)
+    water_weight: Optional[float] = Field(None, gt=0, le=10000)
+    grind_size: Optional[str] = Field(None, max_length=120)
+    water_temp: Optional[int] = Field(None, ge=0, le=100)
+    description: Optional[str] = Field(None, max_length=1000)
     steps: Optional[List[str]] = None
     is_favorite: Optional[bool] = None
+
+    @field_validator("steps")
+    @classmethod
+    def steps_are_reasonable(cls, value):
+        if value is None:
+            return value
+        if len(value) > 20:
+            raise ValueError("A receita pode ter no máximo 20 etapas.")
+        if any(len(str(step)) > 500 for step in value):
+            raise ValueError("Cada etapa da receita pode ter no máximo 500 caracteres.")
+        return value
 
 class RecipeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -313,9 +358,9 @@ class RecipeResponse(BaseModel):
 
 #--- SCHEMAS PYDANTIC - MOTOR INTELIGENTE (FASE 6)
 class MotorCalculationRequest(BaseModel):
-    coffee_weight: Optional[float] = None
-    water_weight: Optional[float] = None
-    ratio: Optional[float] = None  # Ex: 16.0 para proporção 1:16
+    coffee_weight: Optional[float] = Field(None, gt=0, le=1000)
+    water_weight: Optional[float] = Field(None, gt=0, le=10000)
+    ratio: Optional[float] = Field(None, gt=0, le=100)  # Ex: 16.0 para proporção 1:16
 
 class MotorCalculationResponse(BaseModel):
     coffee_weight: float
@@ -344,9 +389,9 @@ class Extraction(Base):
 class ExtractionCreate(BaseModel):
     recipe_id: Optional[int] = None
     coffee_id: Optional[int] = None
-    total_time: int = Field(..., gt=0)
-    rating: Optional[int] = Field(default=None, ge=1, le=5)
-    notes: Optional[str] = None
+    total_time: int = Field(..., gt=0, le=7200)
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    notes: Optional[str] = Field(None, max_length=1000)
 
 class ExtractionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -394,14 +439,14 @@ class SensoryLog(Base):
 class SensoryLogCreate(BaseModel):
     coffee_id: Optional[int] = None
     extraction_id: Optional[int] = None
-    aroma_score: int = Field(default=5, ge=1, le=10)
-    acidity_score: int = Field(default=5, ge=1, le=10)
-    body_score: int = Field(default=5, ge=1, le=10)
-    sweetness_score: int = Field(default=5, ge=1, le=10)
-    aftertaste_score: int = Field(default=5, ge=1, le=10)
-    perceived_notes: Optional[str] = None
-    unperceived_notes: Optional[str] = None
-    comments: Optional[str] = None
+    aroma_score: int = Field(5, ge=1, le=10)
+    acidity_score: int = Field(5, ge=1, le=10)
+    body_score: int = Field(5, ge=1, le=10)
+    sweetness_score: int = Field(5, ge=1, le=10)
+    aftertaste_score: int = Field(5, ge=1, le=10)
+    perceived_notes: Optional[str] = Field(None, max_length=1000)
+    unperceived_notes: Optional[str] = Field(None, max_length=1000)
+    comments: Optional[str] = Field(None, max_length=1000)
 
 class SensoryLogResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -448,12 +493,12 @@ class Beverage(Base):
 
 # --- ADICIONE JUNTO COM OS OUTROS SCHEMAS PYDANTIC ---
 class BeverageCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(None, max_length=1000)
     is_cold: bool = False
-    ingredients: Optional[str] = None
-    espresso_shots: int = Field(default=1, ge=0, le=10)
-    total_volume_ml: Optional[int] = Field(default=None, ge=0)
+    ingredients: Optional[str] = Field(None, max_length=1000)
+    espresso_shots: int = Field(1, ge=0, le=12)
+    total_volume_ml: Optional[int] = Field(None, ge=0, le=5000)
 
 class BeverageResponse(BeverageCreate):
     model_config = ConfigDict(from_attributes=True)
