@@ -28,7 +28,6 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = None
     smtp_from_email: Optional[str] = None
     smtp_from_name: str = "Coffee Lab"
-    strict_production_config: bool = False
 
 @lru_cache
 def get_settings() -> Settings:
@@ -54,10 +53,7 @@ def validate_runtime_settings() -> None:
         errors.append("configure DATABASE_URL com PostgreSQL/NeonDB em produção")
 
     if errors:
-        message = "Configuração de produção incompleta: " + "; ".join(errors) + "."
-        if settings.strict_production_config:
-            raise RuntimeError(message)
-        print(f"[Config] {message}")
+        raise RuntimeError("Configuração insegura para produção: " + "; ".join(errors) + ".")
 
 class Base(DeclarativeBase):
     pass
